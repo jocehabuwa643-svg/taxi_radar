@@ -23,7 +23,7 @@
         body { background-color: #050505; color: #fff; overflow: hidden; overscroll-behavior-y: none; }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         button { border: none; background: none; color: inherit; cursor: pointer; outline: none; }
-        a { text-decoration: none; color: inherit; }
+        a { text-decoration: none; color: inherit; display: inline-block; }
 
         /* === TYPOGRAPHY === */
         .text-demand { color: #C026D3; }
@@ -104,7 +104,7 @@
         /* Map */
         #map { position: absolute; inset: 0; z-index: 0; }
 
-        /* Parametric Corners (Top-Left & Top-Right) */
+        /* Parametric Corners */
         .corner-widget {
             position: absolute; z-index: 1000; padding: 12px 16px; border-radius: 16px;
             transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s;
@@ -163,7 +163,7 @@
         /* Bottom Sheet */
         #bottom-sheet {
             position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
-            height: 38vh; border-radius: 24px 24px 0 0; padding: 0 16px;
+            height: 42vh; border-radius: 24px 24px 0 0; padding: 0 16px;
             display: flex; flex-direction: column;
             transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
             touch-action: none;
@@ -182,6 +182,21 @@
         }
         .event-card:active { background: rgba(255,255,255,0.08); }
         .price-tag { background: rgba(192,38,211,0.2); color: #C026D3; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.75rem; }
+
+        /* Navigation Buttons */
+        .route-btn {
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+            width: 100%; margin-top: 12px; background: #C026D3; color: #fff; padding: 12px; 
+            border-radius: 8px; font-weight: bold; transition: background 0.2s; text-align: center;
+        }
+        .route-btn:active { background: #a21caf; }
+        
+        .route-btn-small {
+            background: rgba(192, 38, 211, 0.2); color: #C026D3; font-weight: bold;
+            padding: 6px 12px; border-radius: 8px; font-size: 0.75rem; transition: 0.2s;
+            display: inline-flex; align-items: center; gap: 4px;
+        }
+        .route-btn-small:active { background: rgba(192, 38, 211, 0.4); }
 
         /* Auto-Hide Classes */
         .hide-top { transform: translateY(-150%); opacity: 0; pointer-events: none; }
@@ -212,12 +227,6 @@
         .pulse-dot { width: 8px; height: 8px; background: #C026D3; border-radius: 50%; animation: pulse-anim 2s infinite; }
         @keyframes pulse-anim { 0% { box-shadow: 0 0 0 0 rgba(192,38,211,0.7); } 70% { box-shadow: 0 0 0 10px rgba(192,38,211,0); } 100% { box-shadow: 0 0 0 0 rgba(192,38,211,0); } }
 
-        .route-btn {
-            display: flex; justify-content: center; align-items: center; gap: 8px;
-            width: 100%; margin-top: 12px; background: #C026D3; color: #fff; padding: 10px; 
-            border-radius: 8px; font-weight: bold; transition: background 0.2s;
-        }
-        .route-btn:active { background: #a21caf; }
     </style>
 </head>
 <body>
@@ -330,7 +339,6 @@
         
         let isSpeaking = false;
         let sheetTimeout, radarTimeout;
-        let trafficIncidentSpoken = false;
         let audioCtx;
 
         // === PRELOADER LOGIC ===
@@ -372,62 +380,45 @@
         // === DYNAMIC EVENTS GENERATOR (Global & Crowd Focused) ===
         function generateDynamicZones(lat, lng, city) {
             const shortCity = city.split(',')[0].split(' ')[0] || "Город";
-            
-            // Format today's dates for timestamps
-            const now = new Date();
             const todayStr = "Сегодня";
+            const tomorrowStr = "Завтра";
             
+            // Generate 10 varied high-demand zones around user coordinates
             return [
-                { 
-                    id: 1, type: "Событие", name: `Главный Концертный Зал / Арена`, 
-                    lat: lat + 0.015, lng: lng + 0.02, priceRange: "1400–2200 ₽", intensity: 10, 
-                    profile: "Зрители, молодёжь", timestamp: `${todayStr}, 20:00 - 22:30`, 
-                    desc: "Массовый выход зрителей после мероприятия. Высочайший спрос и нехватка машин." 
-                },
-                { 
-                    id: 2, type: "Акция", name: `Крупный ТЦ (${shortCity})`, 
-                    lat: lat - 0.02, lng: lng + 0.01, priceRange: "800–1500 ₽", intensity: 8, 
-                    profile: "Покупатели, семьи с пакетами", timestamp: `${todayStr}, 18:00 - 21:00`, 
-                    desc: "Вечерняя распродажа или акция. Повышенная плотность заказов в спальные районы." 
-                },
-                { 
-                    id: 3, type: "Трафик", name: "Ресторанная улица / Центр", 
-                    lat: lat + 0.005, lng: lng - 0.015, priceRange: "1000–1800 ₽", intensity: 8.5, 
-                    profile: "Отдыхающие, туристы", timestamp: `${todayStr}, 21:00 - 02:00`, 
-                    desc: "Высокая концентрация людей в барах и развлекательных заведениях." 
-                },
-                { 
-                    id: 4, type: "Трансфер", name: "Транспортный Хаб (Вокзал/Аэропорт)", 
-                    lat: lat + 0.05, lng: lng - 0.04, priceRange: "1800–3500 ₽", intensity: 9.5, 
-                    profile: "Приезжие с багажом", timestamp: "Весь день, пик в 19:30", 
-                    desc: "Гарантированные дальние поездки. Рекомендуется подавать машину с пустым багажником." 
-                }
+                // Transport Hubs
+                { id: 1, type: "Трансфер", name: `Аэропорт (${shortCity})`, lat: lat + 0.08, lng: lng - 0.06, priceRange: "1800–3500 ₽", intensity: 9.5, profile: "Приезжие, багаж", timestamp: `${todayStr}, Пик в 19:30`, desc: "Длинные и дорогие поездки. Держите багажник пустым." },
+                { id: 2, type: "Трансфер", name: `Главный Вокзал`, lat: lat + 0.02, lng: lng + 0.015, priceRange: "800–1400 ₽", intensity: 8.5, profile: "Приезжие, семьи", timestamp: `${todayStr}, 18:00 - 20:00`, desc: "Массовое прибытие поездов и электричек." },
+                
+                // Malls and Shopping
+                { id: 3, type: "ТЦ", name: `Крупный Молл / Центр`, lat: lat - 0.02, lng: lng + 0.01, priceRange: "800–1500 ₽", intensity: 8, profile: "Покупатели, семьи", timestamp: `${todayStr}, 18:00 - 21:00`, desc: "Вечерняя активность. Повышенная плотность заказов в спальные районы." },
+                { id: 4, type: "ТЦ", name: `Загородный Аутлет`, lat: lat - 0.05, lng: lng - 0.04, priceRange: "1000–1700 ₽", intensity: 7.5, profile: "Семьи, шопоголики", timestamp: `${todayStr}, 16:00 - 19:00`, desc: "Хорошие дистанции и средние чеки." },
+                
+                // Restaurants and Nightlife
+                { id: 5, type: "Трафик", name: "Ресторанная улица / Бары", lat: lat + 0.005, lng: lng - 0.015, priceRange: "1000–1800 ₽", intensity: 9, profile: "Молодежь, отдыхающие", timestamp: `${todayStr}, 21:00 - 03:00`, desc: "Высокая концентрация ночной жизни." },
+                { id: 6, type: "Трафик", name: "Деловой Центр / Сити", lat: lat + 0.01, lng: lng + 0.005, priceRange: "700–1200 ₽", intensity: 8.5, profile: "Офисные работники", timestamp: `${todayStr}, 17:30 - 19:30`, desc: "Окончание рабочего дня. Ожидаются корпоративные поездки." },
+                
+                // Events (Today)
+                { id: 7, type: "Событие", name: `Главный Стадион / Арена`, lat: lat + 0.03, lng: lng + 0.04, priceRange: "1500–2500 ₽", intensity: 10, profile: "Болельщики", timestamp: `${todayStr}, 21:30 - 22:30`, desc: "Окончание крупного матча. Огромный спрос и нехватка машин." },
+                { id: 8, type: "Событие", name: `Театр / Концертный зал`, lat: lat + 0.008, lng: lng - 0.002, priceRange: "1200–2000 ₽", intensity: 9, profile: "Состоятельная публика", timestamp: `${todayStr}, 21:00 - 22:00`, desc: "Массовый выход зрителей. Заказы комфорт+." },
+                
+                // Events (Tomorrow)
+                { id: 9, type: "Анонс", name: `Музыкальный Фестиваль`, lat: lat - 0.03, lng: lng - 0.02, priceRange: "1500–3000 ₽", intensity: 9.5, profile: "Молодежь, туристы", timestamp: `${tomorrowStr}, 14:00 - 23:00`, desc: "Масштабный open-air. Будет высокий спрос весь день. Планируйте смену." },
+                { id: 10, type: "Анонс", name: `IT Конференция / Форум`, lat: lat + 0.04, lng: lng - 0.03, priceRange: "1200–2200 ₽", intensity: 8.5, profile: "Специалисты, спикеры", timestamp: `${tomorrowStr}, 09:00 - 18:00`, desc: "Бизнес и комфорт-класс поездки к Экспоцентру или крупному отелю." }
             ];
         }
 
-        // === EXTERNAL ROUTING FUNCTION (Yandex Maps / Google Maps bypass) ===
-        window.openExternalRoute = function(targetLat, targetLng) {
+        // === SECURE ROUTING (NATIVE <A> TAG) ===
+        // Generates the Yandex Maps deep link URL
+        function getRouteUrl(targetLat, targetLng) {
             let url;
             if (userMarker) {
                 const uPos = userMarker.getLatLng();
-                // rtext format: ~ startLat,startLng ~ endLat,endLng
                 url = `https://yandex.ru/maps/?rtext=${uPos.lat},${uPos.lng}~${targetLat},${targetLng}&rtt=auto`;
             } else {
                 url = `https://yandex.ru/maps/?rtext=~${targetLat},${targetLng}&rtt=auto`;
             }
-            
-            // Bypass iframe restrictions safely using dynamic anchor tag
-            const a = document.createElement('a');
-            a.href = url;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-
-            // Hide bottom sheet if open
-            hideBottomSheet();
-        };
+            return url;
+        }
 
         // === STARTUP & GEOLOCATION ===
         document.getElementById('btn-start').addEventListener('click', () => {
@@ -502,8 +493,8 @@
                 // Animate Markers Sequentially
                 renderMarkersSequentially();
                 
-                // Schedule Traffic Update (15 minutes)
-                setTimeout(speakTrafficIncident, 15 * 60 * 1000);
+                // Schedule Periodic Voice Updates (every 10 minutes)
+                setInterval(speakPeriodicUpdate, 10 * 60 * 1000);
 
             }, 600);
         }
@@ -540,9 +531,11 @@
                 color: '#C026D3', fillColor: '#C026D3', fillOpacity: 0.2, weight: 2, radius: radius, className: 'demand-zone'
             }).addTo(map);
 
-            const btnHtml = `<button onclick="window.openExternalRoute(${event.lat}, ${event.lng})" class="route-btn">
-                <i class="ph-bold ph-navigation-arrow"></i> Маршрут
-            </button>`;
+            // A pure HTML anchor tag that guarantees opening the route app externally
+            const routeUrl = getRouteUrl(event.lat, event.lng);
+            const btnHtml = `<a href="${routeUrl}" target="_blank" rel="noopener noreferrer" class="route-btn">
+                <i class="ph-bold ph-navigation-arrow"></i> Навигатор
+            </a>`;
 
             circle.bindPopup(`
                 <div class="flex justify-between items-center" style="margin-bottom: 8px;">
@@ -611,9 +604,15 @@
             const list = document.getElementById('events-list');
             list.innerHTML = '';
             
-            dynamicEvents.forEach(e => {
+            // Only show events that are not "Tomorrow" in the primary list, or sort them nicely
+            const sortedEvents = dynamicEvents.sort((a,b) => b.intensity - a.intensity);
+
+            sortedEvents.forEach(e => {
                 const card = document.createElement('div');
                 card.className = "event-card";
+                
+                const routeUrl = getRouteUrl(e.lat, e.lng);
+                
                 card.innerHTML = `
                     <div class="flex justify-between items-center" style="margin-bottom: 6px;">
                         <h4 class="font-bold text-white text-sm truncate" style="max-width: 60%;">${e.name}</h4>
@@ -623,9 +622,18 @@
                         <span class="flex items-center gap-1 text-demand font-bold"><i class="ph-fill ph-clock"></i> ${e.timestamp}</span>
                         <span style="text-transform: uppercase;">${e.type}</span>
                     </div>
+                    <div class="flex justify-end mt-2">
+                        <!-- Direct anchor tag to bypass iframe click restrictions -->
+                        <a href="${routeUrl}" target="_blank" rel="noopener noreferrer" class="route-btn-small" onclick="event.stopPropagation(); hideBottomSheet();">
+                            <i class="ph-bold ph-navigation-arrow"></i> Маршрут
+                        </a>
+                    </div>
                 `;
-                // Clicking the card opens external route navigation
-                card.onclick = () => window.openExternalRoute(e.lat, e.lng);
+                // Clicking the card opens the marker popup
+                card.onclick = () => { 
+                    map.flyTo([e.lat, e.lng], 14, { duration: 1 });
+                    setTimeout(() => mapMarkers[e.id].openPopup(), 600);
+                };
                 list.appendChild(card);
             });
         }
@@ -660,9 +668,10 @@
         }
 
         function speakInitialBriefing() {
+            // Find closest event (exclude tomorrow's announcements for the immediate goal)
             let closestEvent = null;
             let minD = Infinity;
-            dynamicEvents.forEach(e => {
+            dynamicEvents.filter(e => !e.timestamp.includes('Завтра')).forEach(e => {
                 const d = getDistance(baseLat, baseLng, e.lat, e.lng);
                 if(d < minD) { minD = d; closestEvent = e; }
             });
@@ -674,12 +683,20 @@
             }
         }
 
-        function speakTrafficIncident() {
-            if(trafficIncidentSpoken) return; 
-            const incident = "Внимание: В связи с высокой активностью в центре города, могут быть небольшие затруднения движения.";
-            speak(incident);
-            showLiveRadar(`⚠️ Дорожная сводка:<br>${incident}`);
-            trafficIncidentSpoken = true;
+        function speakPeriodicUpdate() {
+            // Mention tomorrow's events and general traffic
+            const tmrwEvents = dynamicEvents.filter(e => e.timestamp.includes('Завтра')).sort((a,b) => b.intensity - a.intensity);
+            
+            let msg = "Дорожная сводка: высокий спрос сохраняется в центре. ";
+            let radarMsg = "⚠️ Обновление:<br>Высокий спрос в центре.";
+
+            if (tmrwEvents.length > 0) {
+                msg += `Также напоминаем, завтра ожидается крупное событие: ${tmrwEvents[0].name}. Планируйте смену заранее.`;
+                radarMsg = `⚠️ Анонс на завтра:<br>${tmrwEvents[0].name}`;
+            }
+
+            speak(msg);
+            showLiveRadar(radarMsg);
         }
 
         document.getElementById('btn-voice').addEventListener('click', () => {
@@ -689,7 +706,7 @@
                 document.getElementById('btn-voice').style.background = '';
                 document.getElementById('btn-voice').style.color = '#C026D3';
             } else {
-                let closestEvent = dynamicEvents[0];
+                let closestEvent = dynamicEvents.filter(e => !e.timestamp.includes('Завтра'))[0] || dynamicEvents[0];
                 let minD = Infinity;
                 dynamicEvents.forEach(e => {
                     const d = getDistance(baseLat, baseLng, e.lat, e.lng);
