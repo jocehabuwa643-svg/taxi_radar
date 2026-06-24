@@ -23,6 +23,7 @@
         body { background-color: #050505; color: #fff; overflow: hidden; overscroll-behavior-y: none; }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         button { border: none; background: none; color: inherit; cursor: pointer; outline: none; }
+        a { text-decoration: none; color: inherit; }
 
         /* === TYPOGRAPHY === */
         .text-demand { color: #C026D3; }
@@ -174,7 +175,7 @@
         .event-card {
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
             border-radius: 16px; padding: 14px; transition: background 0.2s;
-            position: relative; overflow: hidden;
+            position: relative; overflow: hidden; cursor: pointer;
         }
         .event-card::before {
             content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #C026D3; opacity: 0.7;
@@ -207,11 +208,16 @@
             0% { fill-opacity: 0.15; filter: drop-shadow(0 0 5px rgba(192,38,211,0.2)); opacity: 1; transform: scale(1); }
             100% { fill-opacity: 0.4; filter: drop-shadow(0 0 20px rgba(192,38,211,0.6)); opacity: 1; transform: scale(1.02); }
         }
-        .route-line { animation: route-dash 1.5s linear infinite; }
-        @keyframes route-dash { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
         
         .pulse-dot { width: 8px; height: 8px; background: #C026D3; border-radius: 50%; animation: pulse-anim 2s infinite; }
         @keyframes pulse-anim { 0% { box-shadow: 0 0 0 0 rgba(192,38,211,0.7); } 70% { box-shadow: 0 0 0 10px rgba(192,38,211,0); } 100% { box-shadow: 0 0 0 0 rgba(192,38,211,0); } }
+
+        .route-btn {
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+            width: 100%; margin-top: 12px; background: #C026D3; color: #fff; padding: 10px; 
+            border-radius: 8px; font-weight: bold; transition: background 0.2s;
+        }
+        .route-btn:active { background: #a21caf; }
     </style>
 </head>
 <body>
@@ -231,7 +237,7 @@
         <div class="cinematic-author" style="margin-bottom: 2rem; color: #C026D3;">Slava Gordeev</div>
         <i class="ph-fill ph-radar text-demand" style="font-size: 5rem; margin-bottom: 1rem;"></i>
         <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem;" class="font-bold">TAXI RADAR <span class="text-demand">PRO</span></h1>
-        <p class="text-gray text-sm" style="margin-bottom: 3rem; text-align: center;">Динамический анализ зон высокого спроса.</p>
+        <p class="text-gray text-sm" style="margin-bottom: 3rem; text-align: center;">Поиск самых выгодных зон по всему миру.</p>
         
         <button id="btn-start" class="btn-primary">
             <i class="ph-bold ph-power"></i> Запуск радара
@@ -315,9 +321,10 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script>
         // === STATE & GLOBALS ===
-        let baseLat = 59.4370, baseLng = 24.7536; // Default to Tallinn, Estonia if denied
+        // Default to Moscow center if geolocation is completely blocked
+        let baseLat = 55.7558, baseLng = 37.6173; 
         let cityName = "Локация по умолчанию";
-        let map, userMarker, userCircle, activeRoute;
+        let map, userMarker, userCircle;
         let mapMarkers = {};
         let dynamicEvents = [];
         
@@ -362,16 +369,65 @@
             osc.start(); osc.stop(audioCtx.currentTime + 0.2);
         }
 
-        // === DYNAMIC LOCATION GENERATOR ===
-        // This generates relevant mock zones around any coordinate in the world.
+        // === DYNAMIC EVENTS GENERATOR (Global & Crowd Focused) ===
         function generateDynamicZones(lat, lng, city) {
+            const shortCity = city.split(',')[0].split(' ')[0] || "Город";
+            
+            // Format today's dates for timestamps
+            const now = new Date();
+            const todayStr = "Сегодня";
+            
             return [
-                { id: 1, name: "Главный Транспортный Узел", lat: lat + 0.015, lng: lng + 0.02, priceRange: "1400–2200 ₽", intensity: 10, profile: "Приезжие, туристы", peak: "Прямо сейчас", desc: "Массовое прибытие людей. Высокий спрос на авто." },
-                { id: 2, name: `Крупный ТЦ (${city.split(' ')[0]})`, lat: lat - 0.02, lng: lng + 0.01, priceRange: "800–1500 ₽", intensity: 8, profile: "Покупатели, семьи", peak: "18:00 – 21:00", desc: "Много поездок в спальные районы." },
-                { id: 3, name: "Центральная площадь", lat: lat + 0.005, lng: lng - 0.015, priceRange: "1000–1800 ₽", intensity: 8.5, profile: "Офисные работники, пары", peak: "19:00 – 22:30", desc: "Деловые и развлекательные поездки." },
-                { id: 4, name: "Аэропорт / Выезд из города", lat: lat + 0.08, lng: lng - 0.06, priceRange: "1800–3500 ₽", intensity: 9.5, profile: "Командировочные", peak: "Вечерние рейсы", desc: "Длинные и дорогие поездки. Возможен бизнес-класс." }
+                { 
+                    id: 1, type: "Событие", name: `Главный Концертный Зал / Арена`, 
+                    lat: lat + 0.015, lng: lng + 0.02, priceRange: "1400–2200 ₽", intensity: 10, 
+                    profile: "Зрители, молодёжь", timestamp: `${todayStr}, 20:00 - 22:30`, 
+                    desc: "Массовый выход зрителей после мероприятия. Высочайший спрос и нехватка машин." 
+                },
+                { 
+                    id: 2, type: "Акция", name: `Крупный ТЦ (${shortCity})`, 
+                    lat: lat - 0.02, lng: lng + 0.01, priceRange: "800–1500 ₽", intensity: 8, 
+                    profile: "Покупатели, семьи с пакетами", timestamp: `${todayStr}, 18:00 - 21:00`, 
+                    desc: "Вечерняя распродажа или акция. Повышенная плотность заказов в спальные районы." 
+                },
+                { 
+                    id: 3, type: "Трафик", name: "Ресторанная улица / Центр", 
+                    lat: lat + 0.005, lng: lng - 0.015, priceRange: "1000–1800 ₽", intensity: 8.5, 
+                    profile: "Отдыхающие, туристы", timestamp: `${todayStr}, 21:00 - 02:00`, 
+                    desc: "Высокая концентрация людей в барах и развлекательных заведениях." 
+                },
+                { 
+                    id: 4, type: "Трансфер", name: "Транспортный Хаб (Вокзал/Аэропорт)", 
+                    lat: lat + 0.05, lng: lng - 0.04, priceRange: "1800–3500 ₽", intensity: 9.5, 
+                    profile: "Приезжие с багажом", timestamp: "Весь день, пик в 19:30", 
+                    desc: "Гарантированные дальние поездки. Рекомендуется подавать машину с пустым багажником." 
+                }
             ];
         }
+
+        // === EXTERNAL ROUTING FUNCTION (Yandex Maps / Google Maps bypass) ===
+        window.openExternalRoute = function(targetLat, targetLng) {
+            let url;
+            if (userMarker) {
+                const uPos = userMarker.getLatLng();
+                // rtext format: ~ startLat,startLng ~ endLat,endLng
+                url = `https://yandex.ru/maps/?rtext=${uPos.lat},${uPos.lng}~${targetLat},${targetLng}&rtt=auto`;
+            } else {
+                url = `https://yandex.ru/maps/?rtext=~${targetLat},${targetLng}&rtt=auto`;
+            }
+            
+            // Bypass iframe restrictions safely using dynamic anchor tag
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            // Hide bottom sheet if open
+            hideBottomSheet();
+        };
 
         // === STARTUP & GEOLOCATION ===
         document.getElementById('btn-start').addEventListener('click', () => {
@@ -383,7 +439,7 @@
             window.speechSynthesis.speak(utterance);
 
             const status = document.getElementById('location-status');
-            status.innerText = "Поиск спутников...";
+            status.innerText = "Поиск спутников и локации...";
             document.getElementById('btn-start').style.transform = 'scale(0.95)';
             document.getElementById('btn-start').style.opacity = '0.5';
             
@@ -484,12 +540,17 @@
                 color: '#C026D3', fillColor: '#C026D3', fillOpacity: 0.2, weight: 2, radius: radius, className: 'demand-zone'
             }).addTo(map);
 
-            const btnHtml = `<button onclick="drawRoute(${event.lat}, ${event.lng})" style="width: 100%; margin-top: 12px; background: #C026D3; color: #fff; padding: 10px; border-radius: 8px; font-weight: bold;">Маршрут</button>`;
+            const btnHtml = `<button onclick="window.openExternalRoute(${event.lat}, ${event.lng})" class="route-btn">
+                <i class="ph-bold ph-navigation-arrow"></i> Маршрут
+            </button>`;
 
             circle.bindPopup(`
                 <div class="flex justify-between items-center" style="margin-bottom: 8px;">
                     <h3 class="font-bold text-white" style="font-size: 1.1rem; max-width: 70%;">${event.name}</h3>
                     <span class="price-tag">${event.priceRange}</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-demand font-bold" style="margin-bottom: 8px;">
+                    <i class="ph-fill ph-clock"></i> ${event.timestamp}
                 </div>
                 <p class="text-xs text-gray" style="margin-bottom: 12px; text-transform: uppercase;">${event.profile}</p>
                 <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border-left: 2px solid #C026D3; font-size: 0.8rem; font-style: italic; color: #d4d4d8;">
@@ -498,18 +559,6 @@
                 ${btnHtml}
             `);
             mapMarkers[event.id] = circle;
-        }
-
-        window.drawRoute = function(lat, lng) {
-            if (!userMarker) return;
-            if (activeRoute) map.removeLayer(activeRoute);
-            const uPos = userMarker.getLatLng();
-            
-            activeRoute = L.polyline([[uPos.lat, uPos.lng], [lat, lng]], {
-                color: '#C026D3', weight: 4, dashArray: '8, 10', className: 'route-line'
-            }).addTo(map);
-            map.fitBounds(activeRoute.getBounds(), { padding: [50, 50], maxZoom: 14 });
-            hideBottomSheet();
         }
 
         // === UI AUTO-HIDE & SWIPE ===
@@ -570,11 +619,13 @@
                         <h4 class="font-bold text-white text-sm truncate" style="max-width: 60%;">${e.name}</h4>
                         <span class="price-tag">${e.priceRange}</span>
                     </div>
-                    <div class="flex items-center gap-4 text-xs text-gray">
-                        <span><i class="ph-fill ph-clock"></i> ${e.peak}</span>
+                    <div class="flex items-center justify-between text-xs text-gray mt-2">
+                        <span class="flex items-center gap-1 text-demand font-bold"><i class="ph-fill ph-clock"></i> ${e.timestamp}</span>
+                        <span style="text-transform: uppercase;">${e.type}</span>
                     </div>
                 `;
-                card.onclick = () => { drawRoute(e.lat, e.lng); mapMarkers[e.id].openPopup(); };
+                // Clicking the card opens external route navigation
+                card.onclick = () => window.openExternalRoute(e.lat, e.lng);
                 list.appendChild(card);
             });
         }
@@ -617,15 +668,15 @@
             });
 
             if (closestEvent) {
-                const text = `Карта загружена. Ближайшая к вам зона с высоким спросом — ${closestEvent.name}. Ожидаемый заработок до ${closestEvent.priceRange.replace('₽', 'рублей')}.`;
+                const text = `Все зоны загружены. Ближайшая и наиболее выгодная зона для вас — ${closestEvent.name}. Ожидаемый чек до ${closestEvent.priceRange.replace('₽', 'рублей')}.`;
                 speak(text);
-                showLiveRadar(`🗣️ Голосовой помощник:<br>Ближайшая зона — ${closestEvent.name}`);
+                showLiveRadar(`🗣️ Голосовой помощник:<br>Ближайшая цель: ${closestEvent.name}`);
             }
         }
 
         function speakTrafficIncident() {
             if(trafficIncidentSpoken) return; 
-            const incident = "Внимание: Зафиксировано ухудшение погодных условий. Возможны заторы на основных магистралях.";
+            const incident = "Внимание: В связи с высокой активностью в центре города, могут быть небольшие затруднения движения.";
             speak(incident);
             showLiveRadar(`⚠️ Дорожная сводка:<br>${incident}`);
             trafficIncidentSpoken = true;
@@ -644,7 +695,7 @@
                     const d = getDistance(baseLat, baseLng, e.lat, e.lng);
                     if(d < minD) { minD = d; closestEvent = e; }
                 });
-                speak(`Ближайшая прибыльная зона: ${closestEvent.name}.`);
+                speak(`Ближайшая прибыльная зона: ${closestEvent.name}. Ожидаемый чек: ${closestEvent.priceRange.replace('₽', 'рублей')}.`);
                 showLiveRadar(`🗣️ ${closestEvent.name}`);
             }
         });
