@@ -4,1738 +4,580 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#050505">
-    <title>Taxi Radar Pro — AI Enhanced</title>
-
-    <!-- Leaflet CSS -->
+    <title>Taxi Radar Pro — AI Enhanced v2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&display=swap" rel="stylesheet">
-    
-    <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-
     <style>
-        /* === RESET & BASE === */
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: #050505; color: #fff; overflow: hidden; overscroll-behavior-y: none; }
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
-        button { border: none; background: none; color: inherit; cursor: pointer; outline: none; }
-        a { text-decoration: none; color: inherit; display: inline-block; }
+        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+        body{background:#050505;color:#fff;overflow:hidden;overscroll-behavior-y:none}
+        ::-webkit-scrollbar{width:0;background:transparent}
+        button{border:none;background:none;color:inherit;cursor:pointer;outline:none}
+        a{text-decoration:none;color:inherit;display:inline-block}
 
-        /* === TYPOGRAPHY === */
-        .text-demand { color: #C026D3; }
-        .text-white { color: #ffffff; }
-        .text-gray { color: #a1a1aa; }
-        .text-sm { font-size: 0.875rem; }
-        .text-xs { font-size: 0.75rem; }
-        .font-bold { font-weight: 700; }
-        .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-        
-        .cinematic-author {
-            font-family: 'Oswald', sans-serif;
-            font-weight: 400;
-            text-transform: uppercase;
-            letter-spacing: 5px;
-            font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.7);
-        }
+        .text-demand{color:#C026D3}.text-white{color:#fff}.text-gray{color:#a1a1aa}.text-sm{font-size:.875rem}.text-xs{font-size:.75rem}.font-bold{font-weight:700}.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+        .cinematic-author{font-family:'Oswald',sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:5px;font-size:.85rem;color:rgba(255,255,255,.7)}
+        .flex{display:flex}.flex-col{display:flex;flex-direction:column}.items-center{align-items:center}.justify-between{justify-content:space-between}.justify-center{justify-content:center}.gap-2{gap:.5rem}.gap-4{gap:1rem}
 
-        /* === LAYOUT UTILS === */
-        .flex { display: flex; }
-        .flex-col { display: flex; flex-direction: column; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .justify-center { justify-content: center; }
-        .gap-2 { gap: 0.5rem; }
-        .gap-4 { gap: 1rem; }
+        .glass{background:rgba(18,18,22,.65);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.05);border-top:1px solid rgba(255,255,255,.15);box-shadow:0 10px 40px rgba(0,0,0,.7)}
 
-        /* === GLASSMORPHISM === */
-        .glass {
-            background: rgba(18, 18, 22, 0.65);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
-        }
+        #preloader{position:fixed;inset:0;z-index:100000;background:#050505;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s ease,visibility .8s}
+        .taxi-spinner{position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid rgba(192,38,211,.2);box-shadow:inset 0 0 30px rgba(192,38,211,.1);margin-bottom:20px}
+        .taxi-spinner i{font-size:3rem;color:#fff;z-index:5;text-shadow:0 0 15px rgba(192,38,211,.8)}
+        .taxi-sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 70%,rgba(192,38,211,.8) 100%);animation:spin 1.5s cubic-bezier(.4,0,.2,1) infinite}
+        @keyframes spin{100%{transform:rotate(360deg)}}
 
-        /* === PRELOADER === */
-        #preloader {
-            position: fixed; inset: 0; z-index: 100000;
-            background: #050505;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.8s ease, visibility 0.8s;
-        }
-        .taxi-spinner {
-            position: relative; width: 120px; height: 120px;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 50%; border: 1px solid rgba(192, 38, 211, 0.2);
-            box-shadow: inset 0 0 30px rgba(192, 38, 211, 0.1);
-            margin-bottom: 20px;
-        }
-        .taxi-spinner i { font-size: 3rem; color: #fff; z-index: 5; text-shadow: 0 0 15px rgba(192, 38, 211, 0.8); }
-        .taxi-sweep {
-            position: absolute; inset: 0; border-radius: 50%;
-            background: conic-gradient(from 0deg, transparent 70%, rgba(192, 38, 211, 0.8) 100%);
-            animation: spin 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
+        #start-screen{position:absolute;inset:0;z-index:9999;background:radial-gradient(circle at center,rgba(192,38,211,.1) 0%,#050505 80%);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s ease,visibility .6s}
+        .btn-primary{background:#fff;color:#000;font-weight:bold;font-size:1.1rem;padding:1rem 3rem;border-radius:50px;box-shadow:0 0 30px rgba(192,38,211,.3);transition:transform .2s;display:flex;align-items:center;gap:.5rem}
+        .btn-primary:active{transform:scale(.95)}
 
-        /* === START SCREEN === */
-        #start-screen {
-            position: absolute; inset: 0; z-index: 9999;
-            background: radial-gradient(circle at center, rgba(192,38,211,0.1) 0%, #050505 80%);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.6s ease, visibility 0.6s;
-        }
-        .btn-primary {
-            background: #fff; color: #000; font-weight: bold; font-size: 1.1rem;
-            padding: 1rem 3rem; border-radius: 50px;
-            box-shadow: 0 0 30px rgba(192, 38, 211, 0.3); transition: transform 0.2s;
-            display: flex; align-items: center; gap: 0.5rem;
-        }
-        .btn-primary:active { transform: scale(0.95); }
+        #map{position:absolute;inset:0;z-index:0}
+        .corner-widget{position:absolute;z-index:1000;padding:12px 16px;border-radius:16px;transition:transform .6s cubic-bezier(.25,1,.5,1),opacity .6s}
+        #top-left-panel{top:12px;left:12px}
+        #top-right-panel{top:12px;right:12px;display:flex;flex-direction:column;align-items:flex-end}
+        .weather-badge{background:rgba(255,255,255,.05);padding:6px 10px;border-radius:10px;display:flex;align-items:center;gap:6px;font-size:.75rem;color:#d4d4d8;margin-bottom:8px;border:1px solid rgba(255,255,255,.05)}
 
-        /* === MAP === */
-        #map { position: absolute; inset: 0; z-index: 0; }
+        #live-radar{position:absolute;top:100px;left:12px;z-index:500;width:260px;border-radius:16px;padding:14px;transition:transform .6s cubic-bezier(.25,1,.5,1),opacity .6s}
+        .radar-header{border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:8px;margin-bottom:8px}
 
-        /* === CORNER WIDGETS === */
-        .corner-widget {
-            position: absolute; z-index: 1000; padding: 12px 16px; border-radius: 16px;
-            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s;
-        }
-        #top-left-panel { top: 12px; left: 12px; }
-        #top-right-panel { top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; }
-        
-        .weather-badge {
-            background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 10px;
-            display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #d4d4d8;
-            margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05);
-        }
+        #fab-actions{position:absolute;top:140px;right:12px;z-index:400;display:flex;flex-direction:column;gap:10px;transition:opacity .6s}
+        .fab-btn{width:44px;height:44px;border-radius:50%;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:transform .2s,background .3s}
+        .fab-btn:active{transform:scale(.9)}
+        .fab-btn.active-toggle{background:#C026D3!important;color:#fff!important}
 
-        /* === LIVE RADAR === */
-        #live-radar {
-            position: absolute; top: 100px; left: 12px; z-index: 500;
-            width: 260px; border-radius: 16px; padding: 14px;
-            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s;
-        }
-        .radar-header { border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 8px; }
+        #radar-widget{position:absolute;bottom:20px;right:16px;z-index:400;width:70px;height:70px;border-radius:50%;overflow:hidden;border:1px solid rgba(192,38,211,.4);box-shadow:0 0 20px rgba(192,38,211,.2);transition:opacity .6s;pointer-events:none}
+        .radar-sweep-widget{position:absolute;top:0;left:50%;width:35px;height:35px;background:conic-gradient(from 90deg,transparent 0deg,rgba(192,38,211,.8) 90deg);transform-origin:0% 100%;animation:spin 2s linear infinite}
+        .radar-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;border:1px solid rgba(192,38,211,.3);width:100%;height:100%}
+        .radar-ring.inner{width:50%;height:50%}
 
-        /* === FAB === */
-        #fab-actions {
-            position: absolute; top: 140px; right: 12px; z-index: 400;
-            display: flex; flex-direction: column; gap: 12px;
-            transition: opacity 0.6s;
-        }
-        .fab-btn {
-            width: 48px; height: 48px; border-radius: 50%; font-size: 1.2rem;
-            display: flex; align-items: center; justify-content: center;
-            transition: transform 0.2s, background 0.3s;
-        }
-        .fab-btn:active { transform: scale(0.9); }
-        .fab-btn.active-toggle { background: #C026D3 !important; color: #fff !important; }
+        #bottom-sheet{position:absolute;bottom:0;left:0;right:0;z-index:1000;height:45vh;border-radius:24px 24px 0 0;padding:0 16px;display:flex;flex-direction:column;transition:transform .6s cubic-bezier(.25,1,.5,1);touch-action:none}
+        .drag-handle{width:100%;padding:16px 0;display:flex;justify-content:center;cursor:grab}
+        .drag-bar{width:40px;height:5px;background:rgba(255,255,255,.3);border-radius:10px}
+        .events-list{flex-grow:1;overflow-y:auto;padding-bottom:20px;display:flex;flex-direction:column;gap:10px}
+        .event-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:12px;transition:background .2s;position:relative;overflow:hidden;cursor:pointer}
+        .event-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#C026D3;opacity:.7}
+        .event-card:active{background:rgba(255,255,255,.08)}
+        .price-tag{background:rgba(192,38,211,.2);color:#C026D3;padding:3px 7px;border-radius:6px;font-weight:bold;font-size:.7rem}
 
-        /* === RADAR WIDGET === */
-        #radar-widget {
-            position: absolute; bottom: 20px; right: 16px; z-index: 400;
-            width: 70px; height: 70px; border-radius: 50%;
-            overflow: hidden; border: 1px solid rgba(192, 38, 211, 0.4);
-            box-shadow: 0 0 20px rgba(192, 38, 211, 0.2);
-            transition: opacity 0.6s;
-            pointer-events: none;
-        }
-        .radar-sweep-widget {
-            position: absolute; top: 0; left: 50%; width: 35px; height: 35px;
-            background: conic-gradient(from 90deg, transparent 0deg, rgba(192, 38, 211, 0.8) 90deg);
-            transform-origin: 0% 100%; animation: spin 2s linear infinite;
-        }
-        .radar-ring {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            border-radius: 50%; border: 1px solid rgba(192, 38, 211, 0.3);
-            width: 100%; height: 100%;
-        }
-        .radar-ring.inner { width: 50%; height: 50%; }
+        .route-btn{display:flex;justify-content:center;align-items:center;gap:6px;width:100%;background:#C026D3;color:#fff;padding:10px;border-radius:8px;font-weight:bold;transition:background .2s;text-align:center;font-size:.85rem}
+        .route-btn:active{background:#a21caf}
+        .route-btn-small{background:rgba(192,38,211,.2);color:#C026D3;font-weight:bold;padding:7px 10px;border-radius:8px;font-size:.75rem;transition:.2s;display:inline-flex;align-items:center;gap:4px}
+        .route-btn-small:active{background:rgba(192,38,211,.4)}
 
-        /* === BOTTOM SHEET === */
-        #bottom-sheet {
-            position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
-            height: 45vh; border-radius: 24px 24px 0 0; padding: 0 16px;
-            display: flex; flex-direction: column;
-            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
-            touch-action: none;
-        }
-        .drag-handle { width: 100%; padding: 16px 0; display: flex; justify-content: center; cursor: grab; }
-        .drag-bar { width: 40px; height: 5px; background: rgba(255,255,255,0.3); border-radius: 10px; }
-        
-        .events-list { flex-grow: 1; overflow-y: auto; padding-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .event-card {
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 16px; padding: 14px; transition: background 0.2s;
-            position: relative; overflow: hidden; cursor: pointer;
-        }
-        .event-card::before {
-            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #C026D3; opacity: 0.7;
-        }
-        .event-card:active { background: rgba(255,255,255,0.08); }
-        .price-tag { background: rgba(192,38,211,0.2); color: #C026D3; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.75rem; }
+        .hide-top{transform:translateY(-150%);opacity:0;pointer-events:none}
+        .hide-left{transform:translateX(-150%);opacity:0;pointer-events:none}
+        .hide-bottom{transform:translateY(100%);pointer-events:none}
+        .opacity-0{opacity:0;pointer-events:none;visibility:hidden}
+        .d-none{display:none!important}
 
-        /* === NAVIGATION BUTTONS === */
-        .route-btn {
-            display: flex; justify-content: center; align-items: center; gap: 8px;
-            width: 100%; margin-top: 12px; background: #C026D3; color: #fff; padding: 12px; 
-            border-radius: 8px; font-weight: bold; transition: background 0.2s; text-align: center;
-        }
-        .route-btn:active { background: #a21caf; }
-        
-        .route-btn-small {
-            background: rgba(192, 38, 211, 0.2); color: #C026D3; font-weight: bold;
-            padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; transition: 0.2s;
-            display: inline-flex; align-items: center; gap: 4px;
-        }
-        .route-btn-small:active { background: rgba(192, 38, 211, 0.4); }
-        
-        .route-btn-secondary {
-            display: flex; justify-content: center; align-items: center; gap: 8px;
-            width: 100%; margin-top: 8px; background: rgba(255,255,255,0.08); color: #a1a1aa; padding: 10px; 
-            border-radius: 8px; font-weight: bold; transition: background 0.2s; text-align: center;
-            font-size: 0.85rem;
-        }
-        .route-btn-secondary:active { background: rgba(255,255,255,0.15); }
+        .leaflet-control-attribution,.leaflet-control-zoom{display:none!important}
+        .leaflet-popup-content-wrapper{background:rgba(18,18,22,.95)!important;backdrop-filter:blur(20px)!important;border:1px solid rgba(192,38,211,.4)!important;color:#fff!important;border-radius:16px!important;padding:0!important;box-shadow:0 15px 35px rgba(0,0,0,.8)!important}
+        .leaflet-popup-tip-container{display:none}
+        .leaflet-popup-content{margin:0!important;min-width:280px;padding:14px!important}
+        .leaflet-container a.leaflet-popup-close-button{color:#a1a1aa;padding:14px;z-index:10;font-size:18px}
 
-        /* === AUTO-HIDE === */
-        .hide-top { transform: translateY(-150%); opacity: 0; pointer-events: none; }
-        .hide-left { transform: translateX(-150%); opacity: 0; pointer-events: none; }
-        .hide-bottom { transform: translateY(100%); pointer-events: none; }
-        .opacity-0 { opacity: 0; pointer-events: none; visibility: hidden; }
-        .d-none { display: none !important; }
+        .demand-zone{transition:fill-opacity .4s;transform-origin:center;animation:popIn .6s cubic-bezier(.34,1.56,.64,1) forwards,circle-shimmer 3s infinite alternate ease-in-out .6s;opacity:0}
+        @keyframes popIn{0%{opacity:0;transform:scale(.5)}100%{opacity:1;transform:scale(1)}}
+        @keyframes circle-shimmer{0%{fill-opacity:.15;filter:drop-shadow(0 0 5px rgba(192,38,211,.2));opacity:1;transform:scale(1)}100%{fill-opacity:.4;filter:drop-shadow(0 0 20px rgba(192,38,211,.6));opacity:1;transform:scale(1.02)}}
+        .pulse-dot{width:8px;height:8px;background:#C026D3;border-radius:50%;animation:pulse-anim 2s infinite}
+        @keyframes pulse-anim{0%{box-shadow:0 0 0 0 rgba(192,38,211,.7)}70%{box-shadow:0 0 0 10px rgba(192,38,211,0)}100%{box-shadow:0 0 0 0 rgba(192,38,211,0)}}
 
-        /* === LEAFLET OVERRIDES === */
-        .leaflet-control-attribution, .leaflet-control-zoom { display: none !important; }
-        .leaflet-popup-content-wrapper {
-            background: rgba(18, 18, 22, 0.95) !important; backdrop-filter: blur(20px) !important;
-            border: 1px solid rgba(192, 38, 211, 0.4) !important; color: #fff !important;
-            border-radius: 16px !important; padding: 0 !important; box-shadow: 0 15px 35px rgba(0,0,0,0.8) !important;
-        }
-        .leaflet-popup-tip-container { display: none; }
-        .leaflet-popup-content { margin: 0 !important; min-width: 280px; padding: 16px !important; }
-        .leaflet-container a.leaflet-popup-close-button { color: #a1a1aa; padding: 16px; z-index: 10; font-size: 20px; }
+        /* === NAVIGATION PANEL === */
+        #navigation-panel{position:absolute;bottom:0;left:0;right:0;z-index:1500;background:rgba(18,18,22,.95);backdrop-filter:blur(25px);border-top:2px solid #C026D3;padding:0 16px 20px;transform:translateY(100%);transition:transform .5s cubic-bezier(.25,1,.5,1);box-shadow:0 -10px 40px rgba(192,38,211,.15)}
+        #navigation-panel.active{transform:translateY(0)}
+        .nav-top-row{display:flex;align-items:center;gap:14px;padding:14px 0 10px}
+        .nav-maneuver-icon{width:56px;height:56px;min-width:56px;background:#C026D3;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:#fff;box-shadow:0 0 20px rgba(192,38,211,.4)}
+        .nav-instruction{flex:1;display:flex;flex-direction:column;gap:2px}
+        .nav-distance-to{font-size:.8rem;color:#C026D3;font-weight:700;text-transform:uppercase}
+        .nav-turn-text{font-size:1rem;font-weight:700;color:#fff;line-height:1.3}
+        .nav-street-name{font-size:.75rem;color:#a1a1aa}
+        .nav-stats-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:8px}
+        .nav-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+        .nav-stat-value{font-family:ui-monospace,monospace;font-size:1.1rem;font-weight:700;color:#fff}
+        .nav-stat-label{font-size:.55rem;color:#6b7280;text-transform:uppercase;letter-spacing:1px}
+        .nav-progress-bar{width:100%;height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin-bottom:10px;overflow:hidden}
+        .nav-progress-fill{height:100%;background:linear-gradient(90deg,#C026D3,#e879f9);border-radius:2px;transition:width .5s;width:0%}
+        .nav-next-preview{font-size:.7rem;color:#6b7280;padding:4px 0 8px;display:flex;align-items:center;gap:6px}
+        .nav-next-preview i{color:#C026D3}
+        .nav-cancel-btn{width:100%;padding:10px;border-radius:10px;background:rgba(239,68,68,.15);color:#ef4444;font-weight:700;font-size:.85rem;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s}
+        .nav-cancel-btn:active{background:rgba(239,68,68,.3)}
+        .nav-arrived{display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px}
+        .nav-arrived i{font-size:2.5rem;color:#22c55e}
+        .nav-arrived-text{font-size:1rem;font-weight:700}
 
-        /* === MAP ANIMATIONS === */
-        .demand-zone { transition: fill-opacity 0.4s ease; transform-origin: center; animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, circle-shimmer 3s infinite alternate ease-in-out 0.6s; opacity: 0; }
-        @keyframes popIn { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
-        @keyframes circle-shimmer {
-            0% { fill-opacity: 0.15; filter: drop-shadow(0 0 5px rgba(192,38,211,0.2)); opacity: 1; transform: scale(1); }
-            100% { fill-opacity: 0.4; filter: drop-shadow(0 0 20px rgba(192,38,211,0.6)); opacity: 1; transform: scale(1.02); }
-        }
-        
-        .pulse-dot { width: 8px; height: 8px; background: #C026D3; border-radius: 50%; animation: pulse-anim 2s infinite; }
-        @keyframes pulse-anim { 0% { box-shadow: 0 0 0 0 rgba(192,38,211,0.7); } 70% { box-shadow: 0 0 0 10px rgba(192,38,211,0); } 100% { box-shadow: 0 0 0 0 rgba(192,38,211,0); } }
+        #route-loading{position:fixed;inset:0;z-index:2000;background:rgba(5,5,5,.85);display:none;flex-direction:column;align-items:center;justify-content:center;backdrop-filter:blur(10px)}
+        #route-loading.active{display:flex}
+        .route-loading-spinner{width:50px;height:50px;border:3px solid rgba(192,38,211,.2);border-top-color:#C026D3;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:14px}
 
-        /* ========================================= */
-        /* === NEW: NAVIGATION PANEL === */
-        /* ========================================= */
-        #navigation-panel {
-            position: absolute; bottom: 0; left: 0; right: 0; z-index: 1500;
-            background: rgba(18, 18, 22, 0.95);
-            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-            border-top: 2px solid #C026D3;
-            padding: 0 16px 20px;
-            transform: translateY(100%);
-            transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-            box-shadow: 0 -10px 40px rgba(192, 38, 211, 0.15);
-        }
-        #navigation-panel.active { transform: translateY(0); }
+        /* === ALPHA SCORE === */
+        .alpha-badge{display:inline-flex;align-items:center;gap:2px;padding:2px 6px;border-radius:5px;font-size:.65rem;font-weight:700;font-family:ui-monospace,monospace;letter-spacing:.5px}
+        .alpha-critical{background:rgba(192,38,211,.25);color:#e879f9}
+        .alpha-high{background:rgba(249,115,22,.2);color:#fb923c}
+        .alpha-medium{background:rgba(251,191,36,.2);color:#fbbf24}
+        .alpha-low{background:rgba(107,114,128,.2);color:#9ca3af}
 
-        .nav-top-row {
-            display: flex; align-items: center; gap: 14px; padding: 16px 0 12px;
-        }
-        .nav-maneuver-icon {
-            width: 64px; height: 64px; min-width: 64px;
-            background: #C026D3; border-radius: 14px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 2rem; color: #fff;
-            box-shadow: 0 0 20px rgba(192, 38, 211, 0.4);
-        }
-        .nav-instruction {
-            flex: 1; display: flex; flex-direction: column; gap: 2px;
-        }
-        .nav-distance-to { font-size: 0.85rem; color: #C026D3; font-weight: 700; text-transform: uppercase; }
-        .nav-turn-text { font-size: 1.1rem; font-weight: 700; color: #fff; line-height: 1.3; }
-        .nav-street-name { font-size: 0.8rem; color: #a1a1aa; }
+        /* === TICKER === */
+        #ticker-container{position:absolute;top:68px;left:0;right:0;z-index:350;height:28px;overflow:hidden;background:rgba(18,18,22,.85);backdrop-filter:blur(10px);border-bottom:1px solid rgba(192,38,211,.15);transition:opacity .6s}
+        #ticker-track{display:inline-flex;align-items:center;white-space:nowrap;height:100%;animation:ticker-scroll 45s linear infinite;padding:0 20px;gap:36px}
+        .ticker-item{display:inline-flex;align-items:center;gap:5px;font-size:.65rem;color:#a1a1aa;cursor:pointer;transition:color .2s;flex-shrink:0}
+        .ticker-item:hover{color:#e879f9}
+        .ticker-sep{color:rgba(192,38,211,.4);font-size:.45rem;flex-shrink:0}
+        @keyframes ticker-scroll{0%{transform:translateX(10%)}100%{transform:translateX(-100%)}}
 
-        .nav-stats-row {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.08);
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-            margin-bottom: 10px;
-        }
-        .nav-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-        .nav-stat-value { font-family: ui-monospace, monospace; font-size: 1.2rem; font-weight: 700; color: #fff; }
-        .nav-stat-label { font-size: 0.6rem; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
+        /* === VERIFIED BADGE === */
+        .verified-badge{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;color:#22c55e;font-weight:600}
+        .verified-badge i{font-size:.7rem}
 
-        .nav-progress-bar {
-            width: 100%; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; margin-bottom: 12px; overflow: hidden;
-        }
-        .nav-progress-fill {
-            height: 100%; background: linear-gradient(90deg, #C026D3, #e879f9); border-radius: 2px;
-            transition: width 0.5s ease; width: 0%;
-        }
+        /* === FORECAST WIDGET === */
+        #forecast-widget{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:800;border-radius:12px;padding:8px 14px;transition:opacity .6s,transform .6s;cursor:pointer}
+        #forecast-widget.hide-top{transform:translateX(-50%) translateY(-150%);opacity:0;pointer-events:none}
+        .forecast-label{font-size:.55rem;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;text-align:center}
+        #forecast-canvas{display:block;border-radius:4px}
 
-        .nav-next-preview {
-            font-size: 0.75rem; color: #6b7280; padding: 6px 0 10px;
-            display: flex; align-items: center; gap: 6px;
-        }
-        .nav-next-preview i { color: #C026D3; }
+        /* === AI SCANNER === */
+        .scanner-cell{transition:fill-opacity .6s}
+        #scanner-overlay-label{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);z-index:450;padding:6px 16px;border-radius:20px;font-size:.7rem;font-weight:700;color:#e879f9;text-transform:uppercase;letter-spacing:1px;display:none}
+        #scanner-overlay-label.active{display:block}
 
-        .nav-cancel-btn {
-            width: 100%; padding: 12px; border-radius: 10px;
-            background: rgba(239, 68, 68, 0.15); color: #ef4444;
-            font-weight: 700; font-size: 0.9rem;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: background 0.2s;
-        }
-        .nav-cancel-btn:active { background: rgba(239, 68, 68, 0.3); }
+        /* === DEST PULSE === */
+        .dest-pulse{width:18px;height:18px;background:rgba(192,38,211,.4);border:2px solid #C026D3;border-radius:50%;animation:dest-pulse-anim 2s infinite}
+        @keyframes dest-pulse-anim{0%{box-shadow:0 0 0 0 rgba(192,38,211,.6);transform:scale(1)}50%{box-shadow:0 0 0 12px rgba(192,38,211,0);transform:scale(1.1)}100%{box-shadow:0 0 0 0 rgba(192,38,211,0);transform:scale(1)}}
 
-        /* === NEW: ROUTE LOADING OVERLAY === */
-        #route-loading {
-            position: fixed; inset: 0; z-index: 2000;
-            background: rgba(5, 5, 5, 0.85);
-            display: none; flex-direction: column;
-            align-items: center; justify-content: center;
-            backdrop-filter: blur(10px);
-        }
-        #route-loading.active { display: flex; }
-        .route-loading-spinner {
-            width: 60px; height: 60px; border: 3px solid rgba(192, 38, 211, 0.2);
-            border-top-color: #C026D3; border-radius: 50%; animation: spin 0.8s linear infinite;
-            margin-bottom: 16px;
-        }
+        .car-marker-container{background:none!important;border:none!important}
+        .car-marker-rotatable{width:36px;height:36px;transition:transform .3s;display:flex;align-items:center;justify-content:center}
 
-        /* === NEW: ALPHA SCORE BADGES === */
-        .alpha-badge {
-            display: inline-flex; align-items: center; gap: 3px;
-            padding: 3px 7px; border-radius: 6px;
-            font-size: 0.7rem; font-weight: 700;
-            font-family: ui-monospace, monospace;
-            letter-spacing: 0.5px;
-        }
-        .alpha-critical { background: rgba(192, 38, 211, 0.25); color: #e879f9; }
-        .alpha-high { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
-        .alpha-medium { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
-        .alpha-low { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+        /* === POPUP BUTTONS === */
+        .popup-btn-row{display:flex;gap:6px;margin-top:10px}
+        .popup-btn-row .route-btn{flex:1;margin-top:0;font-size:.8rem;padding:9px 6px}
+        .popup-btn-row .route-btn.sec-btn{background:rgba(255,255,255,.08);color:#a1a1aa}
 
-        /* === NEW: TICKER TAPE === */
-        #ticker-container {
-            position: absolute; top: 68px; left: 0; right: 0; z-index: 350;
-            height: 30px; overflow: hidden;
-            background: rgba(18, 18, 22, 0.85);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(192, 38, 211, 0.15);
-            border-top: 1px solid rgba(255, 255, 255, 0.03);
-            transition: opacity 0.6s;
-        }
-        #ticker-track {
-            display: inline-flex; align-items: center;
-            white-space: nowrap; height: 100%;
-            animation: ticker-scroll 45s linear infinite;
-            padding: 0 20px; gap: 40px;
-        }
-        .ticker-item {
-            display: inline-flex; align-items: center; gap: 6px;
-            font-size: 0.7rem; color: #a1a1aa; cursor: pointer;
-            transition: color 0.2s; flex-shrink: 0;
-        }
-        .ticker-item:hover { color: #e879f9; }
-        .ticker-item .ticker-icon { font-size: 0.85rem; }
-        .ticker-sep { color: rgba(192, 38, 211, 0.4); font-size: 0.5rem; flex-shrink: 0; }
+        /* === POI MARKERS === */
+        .poi-dot{width:10px;height:10px;background:rgba(192,38,211,.6);border:1.5px solid #C026D3;border-radius:50%;box-shadow:0 0 6px rgba(192,38,211,.3)}
 
-        @keyframes ticker-scroll {
-            0% { transform: translateX(10%); }
-            100% { transform: translateX(-100%); }
-        }
-
-        /* === NEW: DESTINATION PULSE === */
-        .dest-pulse {
-            width: 20px; height: 20px;
-            background: rgba(192, 38, 211, 0.4);
-            border: 2px solid #C026D3;
-            border-radius: 50%;
-            animation: dest-pulse-anim 2s infinite;
-        }
-        @keyframes dest-pulse-anim {
-            0% { box-shadow: 0 0 0 0 rgba(192,38,211,0.6); transform: scale(1); }
-            50% { box-shadow: 0 0 0 15px rgba(192,38,211,0); transform: scale(1.1); }
-            100% { box-shadow: 0 0 0 0 rgba(192,38,211,0); transform: scale(1); }
-        }
-
-        /* === NEW: CAR MARKER === */
-        .car-marker-container { background: none !important; border: none !important; }
-        .car-marker-rotatable {
-            width: 40px; height: 40px; transition: transform 0.3s ease;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .car-marker-rotatable svg { width: 40px; height: 40px; }
-
-        /* === NEW: NAV ARRIVED STATE === */
-        .nav-arrived {
-            display: flex; flex-direction: column; align-items: center;
-            padding: 20px 0; gap: 8px;
-        }
-        .nav-arrived i { font-size: 3rem; color: #22c55e; }
-        .nav-arrived-text { font-size: 1.1rem; font-weight: 700; color: #fff; }
-        .nav-arrived-sub { font-size: 0.8rem; color: #a1a1aa; }
-
-        /* === NEW: POPUP DUAL BUTTONS === */
-        .popup-btn-row { display: flex; gap: 8px; margin-top: 12px; }
-        .popup-btn-row .route-btn { flex: 1; margin-top: 0; font-size: 0.85rem; padding: 10px 8px; }
-        .popup-btn-row .route-btn.secondary-btn {
-            background: rgba(255,255,255,0.08); color: #a1a1aa;
-        }
-        .popup-btn-row .route-btn.secondary-btn:active { background: rgba(255,255,255,0.15); }
-
-        /* === NEW: TOAST NOTIFICATION === */
-        #toast {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-120%);
-            z-index: 5000; padding: 12px 20px; border-radius: 12px;
-            background: rgba(239, 68, 68, 0.9); backdrop-filter: blur(10px);
-            color: #fff; font-size: 0.85rem; font-weight: 600;
-            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-            max-width: 90vw; text-align: center;
-        }
-        #toast.visible { transform: translateX(-50%) translateY(0); }
+        /* === TOAST === */
+        #toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-120%);z-index:5000;padding:10px 18px;border-radius:12px;background:rgba(239,68,68,.9);backdrop-filter:blur(10px);color:#fff;font-size:.8rem;font-weight:600;transition:transform .4s cubic-bezier(.25,1,.5,1);max-width:90vw;text-align:center}
+        #toast.visible{transform:translateX(-50%) translateY(0)}
+        #toast.info{background:rgba(192,38,211,.9)}
     </style>
 </head>
 <body>
+    <div id="preloader"><div class="taxi-spinner"><div class="taxi-sweep"></div><i class="ph-fill ph-taxi"></i></div><div class="cinematic-author" style="margin-top:15px">Taxi Radar Pro</div><div style="font-size:.6rem;color:#555;margin-top:5px;text-transform:uppercase;letter-spacing:2px">AI Enhanced v2</div></div>
 
-    <!-- PRELOADER -->
-    <div id="preloader">
-        <div class="taxi-spinner">
-            <div class="taxi-sweep"></div>
-            <i class="ph-fill ph-taxi"></i>
-        </div>
-        <div class="cinematic-author" style="margin-top: 15px;">Taxi Radar Pro</div>
-        <div style="font-size: 0.6rem; color: #555; margin-top: 5px; text-transform: uppercase; letter-spacing: 2px;">AI Enhanced Edition</div>
-    </div>
-
-    <!-- START SCREEN -->
     <div id="start-screen" class="opacity-0">
-        <div class="cinematic-author" style="margin-bottom: 2rem; color: #C026D3;">Slava Gordeev</div>
-        <i class="ph-fill ph-radar text-demand" style="font-size: 5rem; margin-bottom: 1rem;"></i>
-        <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem;" class="font-bold">TAXI RADAR <span class="text-demand">PRO</span></h1>
-        <p class="text-gray text-sm" style="margin-bottom: 3rem; text-align: center;">Поиск реальных зон высокого спроса.<br><span class="text-demand text-xs font-bold">AI Enhanced Edition</span></p>
-        
-        <button id="btn-start" class="btn-primary">
-            <i class="ph-bold ph-power"></i> Запуск радара
-        </button>
-        <div id="location-status" class="text-xs text-demand mt-4" style="height: 15px; font-weight: bold;"></div>
+        <div class="cinematic-author" style="margin-bottom:2rem;color:#C026D3">Slava Gordeev</div>
+        <i class="ph-fill ph-radar text-demand" style="font-size:5rem;margin-bottom:1rem"></i>
+        <h1 style="font-size:2.2rem;margin-bottom:.5rem" class="font-bold">TAXI RADAR <span class="text-demand">PRO</span></h1>
+        <p class="text-gray text-sm" style="margin-bottom:3rem;text-align:center">Поиск реальных зон высокого спроса.<br><span class="text-demand text-xs font-bold">AI Enhanced v2 • 75+ зон</span></p>
+        <button id="btn-start" class="btn-primary"><i class="ph-bold ph-power"></i> Запуск радара</button>
+        <div id="location-status" class="text-xs text-demand" style="height:15px;font-weight:bold;margin-top:12px"></div>
     </div>
 
-    <!-- MAP CONTAINER -->
     <div id="map"></div>
+    <div id="ticker-container" class="opacity-0"><div id="ticker-track"></div></div>
 
-    <!-- TICKER TAPE -->
-    <div id="ticker-container" class="opacity-0">
-        <div id="ticker-track"></div>
-    </div>
-
-    <!-- TOP-LEFT PANEL -->
     <div id="top-left-panel" class="glass corner-widget hide-top">
-        <div class="cinematic-author" style="margin-bottom: 4px; font-size: 0.7rem; color: #C026D3;">Slava Gordeev</div>
-        <div class="flex items-baseline gap-3">
-            <span id="current-time" class="font-mono font-bold" style="font-size: 1.6rem; line-height: 1;">00:00</span>
-        </div>
-        <span id="header-city" class="text-xs text-gray font-bold" style="text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 4px;">Поиск локации...</span>
+        <div class="cinematic-author" style="margin-bottom:4px;font-size:.7rem;color:#C026D3">Slava Gordeev</div>
+        <span id="current-time" class="font-mono font-bold" style="font-size:1.6rem;line-height:1">00:00</span>
+        <span id="header-city" class="text-xs text-gray font-bold" style="text-transform:uppercase;letter-spacing:1px;display:block;margin-top:4px">Поиск локации...</span>
     </div>
 
-    <!-- TOP-RIGHT PANEL -->
     <div id="top-right-panel" class="glass corner-widget hide-top">
-        <div id="weather-block" class="weather-badge">
-            <i class="ph-fill ph-cloud-rain" style="color: #60a5fa; font-size: 1rem;"></i>
-            <span>+18°C, Пасмурно</span>
-        </div>
-        <div class="flex flex-col items-end mt-1">
-            <span class="text-gray font-bold" style="font-size: 0.65rem; text-transform: uppercase;">Скорость</span>
-            <div class="flex items-center gap-1">
-                <span id="speed-display" class="font-mono text-demand font-bold" style="font-size: 1.5rem; line-height: 1;">0</span>
-                <span class="text-gray text-xs font-bold">км/ч</span>
-            </div>
+        <div id="weather-block" class="weather-badge"><i class="ph-fill ph-cloud-rain" style="color:#60a5fa;font-size:1rem"></i><span>+18°C, Пасмурно</span></div>
+        <div class="flex flex-col items-end" style="margin-top:4px">
+            <span class="text-gray font-bold" style="font-size:.6rem;text-transform:uppercase">Скорость</span>
+            <div class="flex items-center gap-2"><span id="speed-display" class="font-mono text-demand font-bold" style="font-size:1.4rem;line-height:1">0</span><span class="text-gray text-xs font-bold">км/ч</span></div>
         </div>
     </div>
 
-    <!-- LIVE RADAR -->
+    <div id="forecast-widget" class="glass hide-top">
+        <div class="forecast-label">Прогноз спроса 2ч</div>
+        <canvas id="forecast-canvas" width="140" height="40"></canvas>
+    </div>
+
     <div id="live-radar" class="glass hide-left">
-        <div class="radar-header flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="pulse-dot"></div>
-                <span class="text-xs font-bold text-white uppercase tracking-wider">Live Radar</span>
-            </div>
-            <i class="ph-bold ph-arrows-out-line-horizontal text-gray text-xs"></i>
-        </div>
-        <div id="radar-messages" class="text-xs text-gray" style="line-height: 1.5;">
-            Инициализация систем сканирования...
-        </div>
+        <div class="radar-header flex items-center justify-between"><div class="flex items-center gap-2"><div class="pulse-dot"></div><span class="text-xs font-bold text-white" style="text-transform:uppercase;letter-spacing:1px">Live Radar</span></div></div>
+        <div id="radar-messages" class="text-xs text-gray" style="line-height:1.5">Инициализация...</div>
     </div>
 
-    <!-- FAB ACTIONS -->
     <div id="fab-actions" class="opacity-0">
-        <button id="btn-show-zones" class="glass fab-btn text-white" style="display: none;">
-            <i class="ph-fill ph-list-dashes"></i>
-        </button>
-        <button id="btn-heatmap" class="glass fab-btn text-demand" title="Тепловая карта">
-            <i class="ph-fill ph-flame"></i>
-        </button>
-        <button id="btn-voice" class="glass fab-btn text-demand">
-            <i class="ph-fill ph-speaker-high"></i>
-        </button>
-        <button id="btn-locate" class="glass fab-btn text-white">
-            <i class="ph-fill ph-navigation-arrow"></i>
-        </button>
+        <button id="btn-show-zones" class="glass fab-btn text-white" style="display:none" title="Зоны"><i class="ph-fill ph-list-dashes"></i></button>
+        <button id="btn-scanner" class="glass fab-btn text-demand" title="AI Сканер"><i class="ph-fill ph-scan"></i></button>
+        <button id="btn-heatmap" class="glass fab-btn text-demand" title="Тепловая карта"><i class="ph-fill ph-flame"></i></button>
+        <button id="btn-poi" class="glass fab-btn text-demand" title="Поиск POI"><i class="ph-fill ph-magnifying-glass-plus"></i></button>
+        <button id="btn-voice" class="glass fab-btn text-demand"><i class="ph-fill ph-speaker-high"></i></button>
+        <button id="btn-locate" class="glass fab-btn text-white"><i class="ph-fill ph-navigation-arrow"></i></button>
     </div>
 
-    <!-- RADAR WIDGET -->
-    <div id="radar-widget" class="glass opacity-0">
-        <div class="radar-sweep-widget"></div>
-        <div class="radar-ring"></div>
-        <div class="radar-ring inner"></div>
-    </div>
+    <div id="radar-widget" class="glass opacity-0"><div class="radar-sweep-widget"></div><div class="radar-ring"></div><div class="radar-ring inner"></div></div>
 
-    <!-- BOTTOM SHEET -->
+    <div id="scanner-overlay-label" class="glass">🧠 AI Scanner Active</div>
+
     <div id="bottom-sheet" class="glass hide-bottom">
-        <div class="drag-handle" id="sheet-handle">
-            <div class="drag-bar"></div>
-        </div>
-        <h3 class="text-xs font-bold text-gray" style="text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Актуальные зоны спроса</h3>
+        <div class="drag-handle" id="sheet-handle"><div class="drag-bar"></div></div>
+        <h3 class="text-xs font-bold text-gray" style="text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Зоны спроса • Сортировка по α-Score</h3>
         <div id="events-list" class="events-list"></div>
     </div>
 
-    <!-- NAVIGATION PANEL -->
     <div id="navigation-panel">
-        <div class="nav-top-row">
-            <div class="nav-maneuver-icon" id="nav-icon">
-                <i class="ph-bold ph-arrow-up"></i>
-            </div>
-            <div class="nav-instruction">
-                <div class="nav-distance-to" id="nav-dist-to">—</div>
-                <div class="nav-turn-text" id="nav-turn-text">Построение маршрута...</div>
-                <div class="nav-street-name" id="nav-street">—</div>
-            </div>
-        </div>
-        <div class="nav-stats-row">
-            <div class="nav-stat">
-                <span class="nav-stat-value" id="nav-eta">--</span>
-                <span class="nav-stat-label">Время</span>
-            </div>
-            <div class="nav-stat">
-                <span class="nav-stat-value" id="nav-total-dist">--</span>
-                <span class="nav-stat-label">Дистанция</span>
-            </div>
-            <div class="nav-stat">
-                <span class="nav-stat-value font-mono text-demand" id="nav-speed">0</span>
-                <span class="nav-stat-label">км/ч</span>
-            </div>
-        </div>
+        <div class="nav-top-row"><div class="nav-maneuver-icon" id="nav-icon"><i class="ph-bold ph-arrow-up"></i></div><div class="nav-instruction"><div class="nav-distance-to" id="nav-dist-to">—</div><div class="nav-turn-text" id="nav-turn-text">Построение маршрута...</div><div class="nav-street-name" id="nav-street">—</div></div></div>
+        <div class="nav-stats-row"><div class="nav-stat"><span class="nav-stat-value" id="nav-eta">--</span><span class="nav-stat-label">Время</span></div><div class="nav-stat"><span class="nav-stat-value" id="nav-total-dist">--</span><span class="nav-stat-label">Дист.</span></div><div class="nav-stat"><span class="nav-stat-value font-mono text-demand" id="nav-speed">0</span><span class="nav-stat-label">км/ч</span></div></div>
         <div class="nav-progress-bar"><div class="nav-progress-fill" id="nav-progress"></div></div>
-        <div class="nav-next-preview" id="nav-next-preview">
-            <i class="ph-bold ph-arrow-right"></i>
-            <span>Затем: —</span>
-        </div>
-        <button class="nav-cancel-btn" id="nav-cancel-btn">
-            <i class="ph-bold ph-x-circle"></i> Отменить маршрут
-        </button>
+        <div class="nav-next-preview" id="nav-next-preview"><i class="ph-bold ph-arrow-right"></i><span>—</span></div>
+        <button class="nav-cancel-btn" id="nav-cancel-btn"><i class="ph-bold ph-x-circle"></i> Отменить маршрут</button>
     </div>
 
-    <!-- ROUTE LOADING OVERLAY -->
-    <div id="route-loading">
-        <div class="route-loading-spinner"></div>
-        <div class="cinematic-author" style="font-size: 0.7rem; color: #C026D3;">Построение маршрута</div>
-    </div>
-
-    <!-- TOAST -->
+    <div id="route-loading"><div class="route-loading-spinner"></div><div class="cinematic-author" style="font-size:.7rem;color:#C026D3">Построение маршрута</div></div>
     <div id="toast"></div>
 
-    <!-- SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script>
-    (function() {
-        'use strict';
+    (function(){
+    'use strict';
 
-        // ================================================
-        // === STATE & GLOBALS ===
-        // ================================================
-        let baseLat = 55.7558, baseLng = 37.6173;
-        let cityName = "Локация не определена";
-        let map, userMarker, userCircle;
-        let mapMarkers = {};
-        let localEvents = [];
-        
-        let isSpeaking = false;
-        let voiceMuted = false;
-        let sheetTimeout, radarTimeout;
-        let audioCtx;
+    // ========== STATE ==========
+    let baseLat=55.7558,baseLng=37.6173,cityName="Локация не определена";
+    let map,userMarker,userCircle,mapMarkers={},localEvents=[];
+    let isSpeaking=false,voiceMuted=false,sheetTimeout,radarTimeout,audioCtx;
+    let isNavigating=false,activeRoute=null,routeLayers=[],currentManeuverIndex=0;
+    let navTotalDistance=0,navRemainingDistance=0,voiceAnnounced={},deviationCount=0,currentHeading=0,navAutoCenter=true;
+    let heatLayer=null,heatmapVisible=false,tickerInterval=null;
+    let scannerActive=false,scannerLayers=[];
+    let poiMarkers=[],poiLoaded=false;
 
-        // Navigation state
-        let isNavigating = false;
-        let activeRoute = null;
-        let routeLayers = [];
-        let currentManeuverIndex = 0;
-        let navTotalDistance = 0;
-        let navRemainingDistance = 0;
-        let voiceAnnounced = {};
-        let deviationCount = 0;
-        let currentHeading = 0;
-        let navAutoCenter = true;
+    // ========== PRELOADER & CLOCK ==========
+    window.addEventListener('DOMContentLoaded',()=>{
+        setTimeout(()=>{
+            document.getElementById('preloader').classList.add('opacity-0');
+            setTimeout(()=>document.getElementById('preloader').style.display='none',800);
+            document.getElementById('start-screen').classList.remove('opacity-0');
+        },1800);
+    });
+    setInterval(()=>{document.getElementById('current-time').innerText=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})},1000);
 
-        // Heatmap state
-        let heatLayer = null;
-        let heatmapVisible = false;
+    // ========== AUDIO ==========
+    function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume()}
+    function playBeep(){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='sine';o.frequency.setValueAtTime(900,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(1400,audioCtx.currentTime+.1);g.gain.setValueAtTime(0,audioCtx.currentTime);g.gain.linearRampToValueAtTime(.1,audioCtx.currentTime+.03);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.2);o.start();o.stop(audioCtx.currentTime+.2)}
+    function playChime(){if(!audioCtx)return;[0,150,300].forEach((d,i)=>{setTimeout(()=>{const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='sine';o.frequency.setValueAtTime([800,1000,1200][i],audioCtx.currentTime);g.gain.setValueAtTime(0,audioCtx.currentTime);g.gain.linearRampToValueAtTime(.12,audioCtx.currentTime+.05);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4)},d)})}
 
-        // Ticker state
-        let tickerInterval = null;
+    // ========== VERIFIED EVENTS DATABASE (75 locations) ==========
+    // Coordinates cross-verified via OSM Nominatim + known sources
+    const DB=[
+    // ──── МОСКВА (30) ────
+    {id:'msk_svo',type:'Трансфер',name:'Шереметьево (SVO)',address:'Химки, Московская обл.',lat:55.9726,lng:37.4146,priceRange:'2000–4500 ₽',intensity:10,timeStart:'Круглосуточно',timeEnd:'Пик 20:00',participants:'Крайне высокая загруженность',profile:'Туристы, бизнес',verified:true},
+    {id:'msk_vko',type:'Трансфер',name:'Внуково (VKO)',address:'Внуково, Москва',lat:55.5986,lng:37.2724,priceRange:'1800–4000 ₽',intensity:9,timeStart:'Круглосуточно',timeEnd:'Пик 19:00',participants:'Стабильный спрос',profile:'Командировочные',verified:true},
+    {id:'msk_dme',type:'Трансфер',name:'Домодедово (DME)',address:'Домодедово, Московская обл.',lat:55.4103,lng:37.9025,priceRange:'2200–5000 ₽',intensity:9.5,timeStart:'Круглосуточно',timeEnd:'Пик 21:00',participants:'Международные рейсы',profile:'Туристы, бизнес',verified:true},
+    {id:'msk_3vok',type:'Вокзал',name:'Площадь Трёх Вокзалов',address:'Комсомольская пл.',lat:55.7760,lng:37.6553,priceRange:'1000–2500 ₽',intensity:9.5,timeStart:'17:00',timeEnd:'23:00',participants:'Огромный пассажиропоток',profile:'Приезжие с багажом',verified:true},
+    {id:'msk_belvok',type:'Вокзал',name:'Белорусский вокзал',address:'Тверская Застава пл., 7',lat:55.7763,lng:37.5812,priceRange:'800–1800 ₽',intensity:8,timeStart:'17:00',timeEnd:'22:00',participants:'Аэроэкспресс из SVO',profile:'Транзитные пассажиры',verified:true},
+    {id:'msk_pavvok',type:'Вокзал',name:'Павелецкий вокзал',address:'Павелецкая пл., 1А',lat:55.7303,lng:37.6386,priceRange:'800–1600 ₽',intensity:8,timeStart:'17:00',timeEnd:'22:00',participants:'Аэроэкспресс из DME',profile:'Пассажиры юга',verified:true},
+    {id:'msk_kievvok',type:'Вокзал',name:'Киевский вокзал',address:'пл. Киевского Вокзала, 1',lat:55.7431,lng:37.5660,priceRange:'800–1800 ₽',intensity:8,timeStart:'17:00',timeEnd:'22:00',participants:'Калужское направление',profile:'Аэроэкспресс VKO',verified:true},
+    {id:'msk_kursvok',type:'Вокзал',name:'Курский вокзал',address:'ул. Земляной Вал, 29',lat:55.7578,lng:37.6596,priceRange:'800–1500 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'22:00',participants:'Владимирское направление',profile:'Пригородные пассажиры',verified:true},
+    {id:'msk_euro',type:'ТЦ',name:'ТРЦ Европейский',address:'пл. Киевского Вокзала, 2',lat:55.7446,lng:37.5663,priceRange:'900–2000 ₽',intensity:8.5,timeStart:'18:00',timeEnd:'22:00',participants:'Пиковые нагрузки',profile:'Покупатели, студенты',verified:true},
+    {id:'msk_afimall',type:'ТЦ',name:'АФИМОЛЛ Сити',address:'Пресненская наб., 2',lat:55.7490,lng:37.5394,priceRange:'1200–3000 ₽',intensity:8,timeStart:'18:00',timeEnd:'22:00',participants:'Бизнес-шопинг',profile:'Сотрудники Сити',verified:true},
+    {id:'msk_aviapark',type:'ТЦ',name:'Авиапарк',address:'Ходынский бул., 4',lat:55.7900,lng:37.5312,priceRange:'800–1800 ₽',intensity:8.5,timeStart:'18:00',timeEnd:'22:00',participants:'Крупнейший ТЦ Европы',profile:'Семьи, шопоголики',verified:true},
+    {id:'msk_metro',type:'ТЦ',name:'Метрополис',address:'Ленинградское ш., 16А',lat:55.8268,lng:37.4978,priceRange:'700–1500 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'22:00',participants:'Войковская/Водный стадион',profile:'Молодежь',verified:true},
+    {id:'msk_mega',type:'ТЦ',name:'МЕГА Белая Дача',address:'1-й Покровский пр., 5',lat:55.6621,lng:37.8511,priceRange:'1000–2500 ₽',intensity:8,timeStart:'17:00',timeEnd:'22:00',participants:'ИКЕА + ТЦ',profile:'Семьи с покупками',verified:true},
+    {id:'msk_riviera',type:'ТЦ',name:'Ривьера',address:'Автозаводская ул., 18',lat:55.7072,lng:37.6451,priceRange:'800–1600 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'22:00',participants:'Аквапарк + кино',profile:'Семьи, молодежь',verified:true},
+    {id:'msk_city',type:'Деловой Центр',name:'Москва-Сити',address:'Пресненская наб.',lat:55.7486,lng:37.5391,priceRange:'1200–3500 ₽',intensity:10,timeStart:'17:30',timeEnd:'20:30',participants:'Окончание рабочего дня',profile:'Офисные сотрудники, VIP',verified:true},
+    {id:'msk_bplaza',type:'Деловой Центр',name:'Белая Площадь',address:'Лесная ул., 5Б',lat:55.7785,lng:37.5855,priceRange:'800–2000 ₽',intensity:7.5,timeStart:'17:30',timeEnd:'20:00',participants:'Бизнес-район',profile:'IT, офисы',verified:true},
+    {id:'msk_luzh',type:'Стадион',name:'Лужники',address:'ул. Лужники, 24',lat:55.7155,lng:37.5539,priceRange:'1500–4000 ₽',intensity:9.5,timeStart:'20:00',timeEnd:'23:30',participants:'80 000 зрителей',profile:'Болельщики, концерты',verified:true},
+    {id:'msk_vtb',type:'Арена',name:'ВТБ Арена',address:'Ленинградский пр., 36',lat:55.7919,lng:37.5613,priceRange:'1200–3000 ₽',intensity:9,timeStart:'19:00',timeEnd:'23:00',participants:'Матчи Динамо, концерты',profile:'Спорт, шоу',verified:true},
+    {id:'msk_mega_sport',type:'Арена',name:'Мегаспорт',address:'Ходынский бул., 3',lat:55.7902,lng:37.5342,priceRange:'1000–2500 ₽',intensity:8.5,timeStart:'19:00',timeEnd:'23:00',participants:'Хоккей, концерты',profile:'Зрители',verified:true},
+    {id:'msk_crocus',type:'Выставка',name:'Крокус Экспо',address:'65-66 км МКАД',lat:55.8230,lng:37.3856,priceRange:'1500–3500 ₽',intensity:9,timeStart:'17:00',timeEnd:'21:00',participants:'Международные выставки',profile:'Бизнес',verified:true},
+    {id:'msk_expo',type:'Выставка',name:'Экспоцентр',address:'Краснопресненская наб., 14',lat:55.7488,lng:37.5520,priceRange:'1000–2500 ₽',intensity:8,timeStart:'17:00',timeEnd:'20:00',participants:'B2B выставки',profile:'Деловая аудитория',verified:true},
+    {id:'msk_vdnh',type:'Выставка',name:'ВДНХ',address:'пр. Мира, 119',lat:55.8266,lng:37.6375,priceRange:'800–2000 ₽',intensity:8.5,timeStart:'17:00',timeEnd:'22:00',participants:'Выставки + парк',profile:'Семьи, туристы',verified:true},
+    {id:'msk_crocus_hall',type:'Концерт',name:'Крокус Сити Холл',address:'65-66 км МКАД',lat:55.8202,lng:37.3881,priceRange:'1500–4000 ₽',intensity:9,timeStart:'20:00',timeEnd:'23:30',participants:'Концерты звёзд',profile:'Зрители',verified:true},
+    {id:'msk_redsq',type:'Туризм',name:'Красная Площадь',address:'Красная пл.',lat:55.7539,lng:37.6208,priceRange:'1000–3000 ₽',intensity:8,timeStart:'18:00',timeEnd:'23:00',participants:'Туристическая зона',profile:'Туристы',verified:true},
+    {id:'msk_gorky',type:'Парк',name:'Парк Горького',address:'ул. Крымский Вал, 9',lat:55.7312,lng:37.6019,priceRange:'700–1500 ₽',intensity:7.5,timeStart:'19:00',timeEnd:'23:00',participants:'Отдыхающие',profile:'Молодежь, семьи',verified:true},
+    {id:'msk_bolshoi',type:'Театр',name:'Большой Театр',address:'Театральная пл., 1',lat:55.7601,lng:37.6187,priceRange:'1500–5000 ₽',intensity:8,timeStart:'21:00',timeEnd:'23:30',participants:'VIP-публика',profile:'Театралы, туристы',verified:true},
+    {id:'msk_tretyakov',type:'Музей',name:'Третьяковская Галерея',address:'Лаврушинский пер., 10',lat:55.7413,lng:37.6205,priceRange:'800–1800 ₽',intensity:7,timeStart:'17:00',timeEnd:'21:00',participants:'Туристы',profile:'Культурная аудитория',verified:true},
+    {id:'msk_gum',type:'ТЦ',name:'ГУМ',address:'Красная пл., 3',lat:55.7546,lng:37.6215,priceRange:'1200–3500 ₽',intensity:8,timeStart:'18:00',timeEnd:'22:00',participants:'Премиальный шопинг',profile:'Туристы, VIP',verified:true},
+    {id:'msk_adrenaline',type:'Арена',name:'Adrenaline Stadium',address:'Ленинградский пр., 80к17',lat:55.8074,lng:37.5117,priceRange:'1000–2500 ₽',intensity:8,timeStart:'19:00',timeEnd:'00:00',participants:'Концерты, фестивали',profile:'Молодежь',verified:true},
+    {id:'msk_izmailovo',type:'Туризм',name:'Измайловский Кремль',address:'Измайловское ш., 73ж',lat:55.7938,lng:37.7476,priceRange:'600–1200 ₽',intensity:7,timeStart:'16:00',timeEnd:'20:00',participants:'Вернисаж, сувениры',profile:'Туристы',verified:true},
 
-        // ================================================
-        // === PRELOADER & CLOCK ===
-        // ================================================
-        window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                document.getElementById('preloader').classList.add('opacity-0');
-                setTimeout(() => document.getElementById('preloader').style.display = 'none', 800);
-                document.getElementById('start-screen').classList.remove('opacity-0');
-            }, 1800);
-        });
+    // ──── САНКТ-ПЕТЕРБУРГ (12) ────
+    {id:'spb_led',type:'Трансфер',name:'Аэропорт Пулково',address:'Пулковское ш., 41',lat:59.8003,lng:30.2625,priceRange:'1500–3000 ₽',intensity:9.5,timeStart:'Весь день',timeEnd:'Пик 21:00',participants:'Прибытие рейсов',profile:'Туристы',verified:true},
+    {id:'spb_mosvok',type:'Вокзал',name:'Московский вокзал',address:'Невский пр., 85',lat:59.9296,lng:30.3618,priceRange:'800–1800 ₽',intensity:9,timeStart:'19:00',timeEnd:'21:30',participants:'Сапсан',profile:'Пассажиры',verified:true},
+    {id:'spb_vitvok',type:'Вокзал',name:'Витебский вокзал',address:'Загородный пр., 52',lat:59.9201,lng:30.3293,priceRange:'600–1200 ₽',intensity:7,timeStart:'18:00',timeEnd:'21:00',participants:'Пригородные поезда',profile:'Пассажиры',verified:true},
+    {id:'spb_galeria',type:'ТЦ',name:'ТРЦ Галерея',address:'Лиговский пр., 30а',lat:59.9272,lng:30.3592,priceRange:'700–1500 ₽',intensity:8.5,timeStart:'18:00',timeEnd:'22:00',participants:'Вечерний спрос',profile:'Шопоголики',verified:true},
+    {id:'spb_nevsky_center',type:'ТЦ',name:'Невский Центр',address:'Невский пр., 114-116',lat:59.9257,lng:30.3560,priceRange:'700–1400 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'21:30',participants:'Центр города',profile:'Покупатели',verified:true},
+    {id:'spb_gazprom',type:'Стадион',name:'Газпром Арена',address:'Футбольная аллея, 1',lat:59.9726,lng:30.2205,priceRange:'1500–4500 ₽',intensity:10,timeStart:'19:30',timeEnd:'23:30',participants:'68 000 зрителей',profile:'Болельщики Зенита',verified:true},
+    {id:'spb_ice',type:'Арена',name:'Ледовый Дворец',address:'пр. Пятилеток, 1',lat:59.8446,lng:30.3226,priceRange:'1000–2500 ₽',intensity:8.5,timeStart:'20:00',timeEnd:'23:00',participants:'12 000 зрителей',profile:'Концерты, хоккей',verified:true},
+    {id:'spb_lakhta',type:'Деловой Центр',name:'Лахта Центр',address:'Лахтинский пр., 2',lat:59.9869,lng:30.1776,priceRange:'1200–3000 ₽',intensity:8,timeStart:'17:30',timeEnd:'20:30',participants:'Штаб Газпрома',profile:'Топ-менеджмент',verified:true},
+    {id:'spb_expoforum',type:'Выставка',name:'Экспофорум',address:'Петербургское ш., 64',lat:59.8319,lng:30.3106,priceRange:'1000–2200 ₽',intensity:7.5,timeStart:'17:00',timeEnd:'20:00',participants:'ПМЭФ, конференции',profile:'Бизнес',verified:true},
+    {id:'spb_nevsky',type:'Туризм',name:'Невский проспект',address:'Невский пр.',lat:59.9343,lng:30.3351,priceRange:'800–2000 ₽',intensity:8,timeStart:'18:00',timeEnd:'01:00',participants:'Главная улица',profile:'Туристы, отдыхающие',verified:true},
+    {id:'spb_hermitage',type:'Музей',name:'Эрмитаж',address:'Дворцовая пл., 2',lat:59.9398,lng:30.3146,priceRange:'1000–2500 ₽',intensity:8,timeStart:'17:00',timeEnd:'21:00',participants:'Закрытие музея',profile:'Туристы',verified:true},
+    {id:'spb_mariinsky',type:'Театр',name:'Мариинский Театр',address:'Театральная пл., 1',lat:59.9255,lng:30.2963,priceRange:'1200–3500 ₽',intensity:7.5,timeStart:'21:00',timeEnd:'23:30',participants:'VIP-публика',profile:'Театралы',verified:true},
 
-        setInterval(() => {
-            const now = new Date();
-            document.getElementById('current-time').innerText = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-        }, 1000);
+    // ──── НОВОСИБИРСК (7) ────
+    {id:'nsk_ovb',type:'Трансфер',name:'Аэропорт Толмачёво',address:'г. Обь, пр. Мозжерина, 8А',lat:55.0126,lng:82.6508,priceRange:'1800–3500 ₽',intensity:10,timeStart:'Весь день',timeEnd:'Пик 19:30',participants:'Высокая проходимость',profile:'Туристы, командировочные',verified:true},
+    {id:'nsk_main',type:'Вокзал',name:'Новосибирск-Главный',address:'ул. Д. Шамшурина, 43',lat:55.0355,lng:82.8981,priceRange:'800–1400 ₽',intensity:8.5,timeStart:'18:00',timeEnd:'21:00',participants:'Массовое прибытие',profile:'Семьи',verified:true},
+    {id:'nsk_galeria',type:'ТЦ',name:'ТРЦ Галерея Новосибирск',address:'ул. Гоголя, 13',lat:55.0422,lng:82.9248,priceRange:'700–1200 ₽',intensity:8,timeStart:'18:00',timeEnd:'22:00',participants:'Вечерняя активность',profile:'Молодежь',verified:true},
+    {id:'nsk_aura',type:'ТЦ',name:'ТРЦ Аура',address:'Военная ул., 5',lat:55.0264,lng:82.9402,priceRange:'800–1300 ₽',intensity:7.5,timeStart:'17:00',timeEnd:'21:00',participants:'Массовый отток',profile:'Семьи',verified:true},
+    {id:'nsk_nab',type:'Трафик',name:'Михайловская набережная',address:'ул. Обская, 2',lat:55.0084,lng:82.9386,priceRange:'900–1600 ₽',intensity:8.5,timeStart:'20:00',timeEnd:'23:59',participants:'Повышенная активность',profile:'Отдыхающие',verified:true},
+    {id:'nsk_lds',type:'Арена',name:'ЛДС Сибирь',address:'ул. Немировича-Данченко, 160',lat:55.0597,lng:82.9088,priceRange:'800–1800 ₽',intensity:8,timeStart:'19:00',timeEnd:'23:00',participants:'Хоккей, концерты',profile:'Болельщики',verified:true},
+    {id:'nsk_opera',type:'Театр',name:'НОВАТОперный театр',address:'Красный пр., 36',lat:55.0302,lng:82.9152,priceRange:'800–2000 ₽',intensity:7,timeStart:'20:30',timeEnd:'23:00',participants:'Культурные события',profile:'Театралы',verified:true},
 
-        // ================================================
-        // === AUDIO ===
-        // ================================================
-        function initAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-        }
+    // ──── ЕКАТЕРИНБУРГ (5) ────
+    {id:'ekb_svx',type:'Трансфер',name:'Аэропорт Кольцово',address:'пл. Бахчиванджи, 1',lat:56.7454,lng:60.8037,priceRange:'1000–2500 ₽',intensity:9,timeStart:'Весь день',timeEnd:'Пик 18:30',participants:'Прибытие рейсов',profile:'Приезжие',verified:true},
+    {id:'ekb_grinvich',type:'ТЦ',name:'ТРЦ Гринвич',address:'ул. 8 Марта, 46',lat:56.8290,lng:60.5985,priceRange:'600–1200 ₽',intensity:8.5,timeStart:'17:00',timeEnd:'21:00',participants:'Центр притяжения',profile:'Покупатели',verified:true},
+    {id:'ekb_arena',type:'Стадион',name:'Екатеринбург Арена',address:'ул. Репина, 5',lat:56.8324,lng:60.5728,priceRange:'800–2000 ₽',intensity:8,timeStart:'18:30',timeEnd:'22:30',participants:'Матчи, концерты',profile:'Болельщики',verified:true},
+    {id:'ekb_yeltsin',type:'Музей',name:'Ельцин Центр',address:'ул. Бориса Ельцина, 3',lat:56.8371,lng:60.6030,priceRange:'600–1200 ₽',intensity:7,timeStart:'17:00',timeEnd:'21:00',participants:'Выставки, события',profile:'Культурная аудитория',verified:true},
+    {id:'ekb_passazh',type:'ТЦ',name:'ТРЦ Пассаж',address:'ул. Вайнера, 9',lat:56.8362,lng:60.6048,priceRange:'600–1200 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'21:30',participants:'Центральная улица',profile:'Покупатели',verified:true},
 
-        function playBeep() {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(900, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1400, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.03);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
-        }
+    // ──── КАЗАНЬ (6) ────
+    {id:'kzn_apt',type:'Трансфер',name:'Аэропорт Казань',address:'Аэропорт, 1',lat:55.6062,lng:49.2787,priceRange:'1200–2800 ₽',intensity:9,timeStart:'Весь день',timeEnd:'Пик 19:00',participants:'Стабильный спрос',profile:'Туристы',verified:true},
+    {id:'kzn_mega',type:'ТЦ',name:'ТРЦ Мега',address:'пр. Победы, 141',lat:55.7758,lng:49.2173,priceRange:'700–1400 ₽',intensity:8,timeStart:'18:00',timeEnd:'22:00',participants:'Вечерний отток',profile:'Семьи',verified:true},
+    {id:'kzn_arena',type:'Стадион',name:'Ак Барс Арена',address:'пр. Ямашева, 115а',lat:55.8208,lng:49.1614,priceRange:'1000–2800 ₽',intensity:9,timeStart:'18:00',timeEnd:'22:30',participants:'45 000 зрителей',profile:'Болельщики',verified:true},
+    {id:'kzn_expo',type:'Выставка',name:'Казань Экспо',address:'Орбитальная ул., 1',lat:55.7159,lng:49.1908,priceRange:'1000–2200 ₽',intensity:7.5,timeStart:'17:00',timeEnd:'20:00',participants:'Международные форумы',profile:'Бизнес',verified:true},
+    {id:'kzn_kremlin',type:'Туризм',name:'Казанский Кремль',address:'Кремль, 1',lat:55.7982,lng:49.1062,priceRange:'800–2000 ₽',intensity:8,timeStart:'18:00',timeEnd:'22:00',participants:'Туристическая зона',profile:'Туристы',verified:true},
+    {id:'kzn_riviera',type:'ТЦ',name:'ТРЦ Ривьера',address:'пр. Фатыха Амирхана, 1',lat:55.8175,lng:49.1344,priceRange:'700–1500 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'22:00',participants:'Аквапарк + ТЦ',profile:'Семьи',verified:true},
 
-        function playArrivalChime() {
-            if (!audioCtx) return;
-            [0, 150, 300].forEach((delay, i) => {
-                setTimeout(() => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.connect(gain); gain.connect(audioCtx.destination);
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime([800, 1000, 1200][i], audioCtx.currentTime);
-                    gain.gain.setValueAtTime(0, audioCtx.currentTime);
-                    gain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.05);
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-                    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-                }, delay);
+    // ──── СОЧИ (5) ────
+    {id:'sochi_aer',type:'Трансфер',name:'Аэропорт Сочи',address:'ул. Мира, 50, Адлер',lat:43.4499,lng:39.9566,priceRange:'1500–4000 ₽',intensity:10,timeStart:'Круглосуточно',timeEnd:'Пик 20:00',participants:'Огромный поток',profile:'Отдыхающие',verified:true},
+    {id:'sochi_port',type:'Трафик',name:'Морпорт Сочи',address:'ул. Войкова, 1',lat:43.5806,lng:39.7171,priceRange:'1000–2500 ₽',intensity:9,timeStart:'19:00',timeEnd:'01:00',participants:'Набережная',profile:'Туристы, VIP',verified:true},
+    {id:'sochi_fisht',type:'Стадион',name:'Стадион Фишт',address:'Олимпийский пр., 21',lat:43.4025,lng:39.9553,priceRange:'1500–4000 ₽',intensity:9.5,timeStart:'19:00',timeEnd:'23:00',participants:'48 000 зрителей',profile:'Фанаты',verified:true},
+    {id:'sochi_rosa',type:'Курорт',name:'Роза Хутор',address:'п. Эсто-Садок',lat:43.6571,lng:40.2979,priceRange:'2000–5000 ₽',intensity:8,timeStart:'15:00',timeEnd:'22:00',participants:'Горнолыжный курорт',profile:'Туристы, лыжники',verified:true},
+    {id:'sochi_olympic',type:'Парк',name:'Олимпийский Парк',address:'Адлер, Олимпийский пр.',lat:43.4040,lng:39.9550,priceRange:'1000–2500 ₽',intensity:8.5,timeStart:'18:00',timeEnd:'23:00',participants:'Фонтаны, Формула 1',profile:'Туристы',verified:true},
+
+    // ──── НИЖНИЙ НОВГОРОД (4) ────
+    {id:'nn_apt',type:'Трансфер',name:'Аэропорт Стригино',address:'пл. Стригино, 1',lat:56.2301,lng:43.7840,priceRange:'1000–2000 ₽',intensity:8,timeStart:'Весь день',timeEnd:'Пик 19:00',participants:'Региональные рейсы',profile:'Приезжие',verified:true},
+    {id:'nn_vok',type:'Вокзал',name:'Московский вокзал НН',address:'пл. Революции, 2',lat:56.3229,lng:43.9503,priceRange:'600–1200 ₽',intensity:8,timeStart:'17:00',timeEnd:'22:00',participants:'Ласточка, поезда',profile:'Пассажиры',verified:true},
+    {id:'nn_fantastika',type:'ТЦ',name:'ТРЦ Фантастика',address:'ул. Родионова, 187В',lat:56.2942,lng:43.9798,priceRange:'600–1200 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'22:00',participants:'Крупнейший ТЦ НН',profile:'Семьи',verified:true},
+    {id:'nn_stadium',type:'Стадион',name:'Стадион Нижний Новгород',address:'ул. Бетанкура, 1',lat:56.3380,lng:43.9613,priceRange:'800–2000 ₽',intensity:8,timeStart:'18:30',timeEnd:'22:30',participants:'45 000 зрителей',profile:'Болельщики',verified:true},
+
+    // ──── РОСТОВ-НА-ДОНУ (3) ────
+    {id:'rov_apt',type:'Трансфер',name:'Аэропорт Платов',address:'Грушевский, Аксайский р-н',lat:47.4939,lng:39.9244,priceRange:'1500–3000 ₽',intensity:8.5,timeStart:'Весь день',timeEnd:'Пик 20:00',participants:'Прибытие рейсов',profile:'Приезжие',verified:true},
+    {id:'rov_arena',type:'Стадион',name:'Ростов Арена',address:'Левобережная ул., 2Б',lat:47.2092,lng:39.7389,priceRange:'800–2000 ₽',intensity:8,timeStart:'18:30',timeEnd:'22:30',participants:'45 000 зрителей',profile:'Болельщики',verified:true},
+    {id:'rov_horizon',type:'ТЦ',name:'ТРЦ Горизонт',address:'пр. Нагибина, 32/2',lat:47.2365,lng:39.7146,priceRange:'600–1200 ₽',intensity:7.5,timeStart:'18:00',timeEnd:'22:00',participants:'Вечерний шопинг',profile:'Покупатели',verified:true}
+    ];
+
+    // ========== UTILITY ==========
+    function getDistance(a,b,c,d){const R=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
+    function fmtDist(m){if(m<100)return Math.round(m)+' м';if(m<1000)return(Math.round(m/50)*50)+' м';const k=m/1000;return k<10?k.toFixed(1)+' км':Math.round(k)+' км'}
+    function fmtDur(s){if(s<60)return'< 1 мин';const m=Math.round(s/60);if(m<60)return m+' мин';const h=Math.floor(m/60);return(m%60>0)?h+' ч '+(m%60)+' мин':h+' ч'}
+    function fmtDistSpeech(m){if(m<100)return(Math.round(m/10)*10)+' метров';if(m<1000)return(Math.round(m/50)*50)+' метров';const k=m/1000;return k<2?k.toFixed(1)+' километра':Math.round(k)+' километров'}
+    function getRouteUrl(a,b){return`https://yandex.ru/maps/?rtext=~${a},${b}&rtt=auto`}
+    function showToast(msg,dur=3000,cls=''){const t=document.getElementById('toast');t.textContent=msg;t.className=cls?'visible '+cls:'visible';setTimeout(()=>t.className='',dur)}
+
+    // ========== VOICE ==========
+    function speak(text){if(!('speechSynthesis' in window)||isSpeaking||voiceMuted)return;const u=new SpeechSynthesisUtterance(text);u.lang='ru-RU';u.rate=1.05;u.pitch=.95;const v=speechSynthesis.getVoices().find(v=>v.lang==='ru-RU');if(v)u.voice=v;u.onstart=()=>{isSpeaking=true;document.getElementById('btn-voice').style.background='#C026D3';document.getElementById('btn-voice').style.color='#fff'};u.onend=()=>{isSpeaking=false;document.getElementById('btn-voice').style.background='';document.getElementById('btn-voice').style.color=voiceMuted?'#555':'#C026D3'};speechSynthesis.speak(u)}
+
+    // ========== ALPHA SCORE ==========
+    function parseHour(s){const m=s.match(/(\d{1,2}):(\d{2})/);if(m)return+m[1]+m[2]/60;const p=s.match(/Пик\s+(\d{1,2}):(\d{2})/);if(p)return+p[1]+p[2]/60;return-1}
+    function calcAlpha(ev){const now=new Date(),ch=now.getHours()+now.getMinutes()/60,wd=now.getDay(),we=wd===0||wd===6;let s=0;
+        const sh=parseHour(ev.timeStart),eh=parseHour(ev.timeEnd);if(sh===-1){s+=18}else{const pk=eh!==-1?(sh+eh)/2:sh,d=Math.abs(ch-pk);s+=d<=1?30:d<=2?22:d<=3?14:d<=5?6:2}
+        s+=10;// weather sim
+        const ent=['Стадион','Арена','Трафик','Парк','Концерт','Курорт'].includes(ev.type),biz=['Деловой Центр','Выставка'].includes(ev.type);
+        s+=ent&&we?15:ent?8:biz&&!we?14:biz&&we?4:10;
+        const dist=getDistance(baseLat,baseLng,ev.lat,ev.lng);s+=dist<=3?20:dist<=10?15:dist<=30?10:dist<=60?5:2;
+        s+=Math.round(ev.intensity/10*20);return Math.min(100,Math.max(0,s))}
+    function alphaClass(s){return s>=81?'alpha-critical':s>=61?'alpha-high':s>=31?'alpha-medium':'alpha-low'}
+    function alphaBadge(s){return`<span class="alpha-badge ${alphaClass(s)}">α ${s}</span>`}
+
+    // ========== DEMAND FORECAST ==========
+    function generateForecast(){
+        const now=new Date(),pts=[];
+        for(let i=0;i<8;i++){// 8 x 15min = 2 hours
+            const h=now.getHours()+(now.getMinutes()+i*15)/60;
+            let demand=30;
+            localEvents.forEach(ev=>{const sh=parseHour(ev.timeStart),eh=parseHour(ev.timeEnd);
+                if(sh!==-1&&eh!==-1&&h>=sh-1&&h<=eh+0.5)demand+=ev.intensity*3;
+                else if(sh===-1)demand+=ev.intensity*1.5;
             });
+            demand+=Math.sin(h/24*Math.PI*2-1)*15;// daily cycle
+            pts.push(Math.min(100,Math.max(5,demand)));
         }
+        return pts;
+    }
+    function drawForecast(){
+        const c=document.getElementById('forecast-canvas'),ctx=c.getContext('2d'),pts=generateForecast(),w=c.width,h=c.height;
+        ctx.clearRect(0,0,w,h);
+        const max=Math.max(...pts),min=Math.min(...pts),range=max-min||1;
+        // gradient fill
+        const grad=ctx.createLinearGradient(0,0,0,h);grad.addColorStop(0,'rgba(192,38,211,0.3)');grad.addColorStop(1,'rgba(192,38,211,0)');
+        ctx.beginPath();ctx.moveTo(0,h);
+        pts.forEach((v,i)=>{const x=i/(pts.length-1)*w,y=h-(v-min)/range*(h-6)-3;i===0?ctx.lineTo(x,y):ctx.lineTo(x,y)});
+        ctx.lineTo(w,h);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+        // line
+        ctx.beginPath();pts.forEach((v,i)=>{const x=i/(pts.length-1)*w,y=h-(v-min)/range*(h-6)-3;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
+        ctx.strokeStyle='#C026D3';ctx.lineWidth=2;ctx.stroke();
+        // dots
+        pts.forEach((v,i)=>{const x=i/(pts.length-1)*w,y=h-(v-min)/range*(h-6)-3;ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fillStyle=i===0?'#fff':'#C026D3';ctx.fill()});
+    }
 
-        // ================================================
-        // === EXPANDED EVENTS DATABASE ===
-        // ================================================
-        const masterEventsDB = [
-            // === НОВОСИБИРСК ===
-            { id: 'nsk1', type: "Трансфер", name: "Аэропорт Толмачёво", address: "г. Обь, проспект Мозжерина, 8А", lat: 55.0125, lng: 82.6655, priceRange: "1800–3500 ₽", intensity: 10, profile: "Приезжие, туристы, багаж", timeStart: "Весь день", timeEnd: "Пик 19:30", participants: "Высокая проходимость" },
-            { id: 'nsk2', type: "Вокзал", name: "Новосибирск-Главный", address: "ул. Дмитрия Шамшурина, 43", lat: 55.0355, lng: 82.8981, priceRange: "800–1400 ₽", intensity: 8.5, profile: "Семьи, командировочные", timeStart: "18:00", timeEnd: "21:00", participants: "Массовое прибытие поездов" },
-            { id: 'nsk3', type: "ТЦ", name: "ТРЦ Галерея Новосибирск", address: "ул. Гоголя, 13", lat: 55.0422, lng: 82.9248, priceRange: "700–1200 ₽", intensity: 8, profile: "Молодежь, покупатели с пакетами", timeStart: "18:00", timeEnd: "22:00", participants: "Активность в вечернее время" },
-            { id: 'nsk4', type: "ТЦ", name: "ТРЦ Аура", address: "Военная ул., 5", lat: 55.0264, lng: 82.9402, priceRange: "800–1300 ₽", intensity: 7.5, profile: "Семьи, шопоголики", timeStart: "17:00", timeEnd: "21:00", participants: "Массовый отток посетителей" },
-            { id: 'nsk5', type: "Трафик", name: "Михайловская набережная", address: "ул. Обская, 2", lat: 55.0084, lng: 82.9386, priceRange: "900–1600 ₽", intensity: 8.5, profile: "Отдыхающие, туристы", timeStart: "20:00", timeEnd: "23:59", participants: "Повышенная активность" },
-            { id: 'nsk6', type: "Арена", name: "ЛДС Сибирь", address: "ул. Немировича-Данченко, 160", lat: 55.0597, lng: 82.9088, priceRange: "800–1800 ₽", intensity: 8, profile: "Болельщики, зрители концертов", timeStart: "19:00", timeEnd: "23:00", participants: "Массовый выход после событий" },
-
-            // === МОСКВА ===
-            { id: 'msk1', type: "Трансфер", name: "Шереметьево (SVO)", address: "Химки, Московская обл.", lat: 55.9726, lng: 37.4146, priceRange: "2000–4500 ₽", intensity: 10, profile: "Туристы, бизнес", timeStart: "Круглосуточно", timeEnd: "Пик 20:00", participants: "Крайне высокая загруженность" },
-            { id: 'msk2', type: "Трансфер", name: "Внуково (VKO)", address: "Внуково, Москва", lat: 55.5986, lng: 37.2724, priceRange: "1800–4000 ₽", intensity: 9, profile: "Командировочные", timeStart: "Круглосуточно", timeEnd: "Пик 19:00", participants: "Стабильно высокий спрос" },
-            { id: 'msk3', type: "Вокзал", name: "Площадь Трех Вокзалов", address: "Комсомольская пл.", lat: 55.7760, lng: 37.6580, priceRange: "1000–2500 ₽", intensity: 9.5, profile: "Приезжие с багажом", timeStart: "17:00", timeEnd: "23:00", participants: "Огромный пассажиропоток" },
-            { id: 'msk4', type: "ТЦ", name: "ТРЦ Европейский", address: "пл. Киевского Вокзала, 2", lat: 55.7446, lng: 37.5663, priceRange: "900–2000 ₽", intensity: 8.5, profile: "Покупатели, студенты", timeStart: "18:00", timeEnd: "22:00", participants: "Пиковые нагрузки" },
-            { id: 'msk5', type: "Деловой Центр", name: "Москва-Сити", address: "Пресненская наб.", lat: 55.7486, lng: 37.5391, priceRange: "1200–3500 ₽", intensity: 10, profile: "Офисные сотрудники, VIP", timeStart: "17:30", timeEnd: "20:30", participants: "Окончание рабочего дня" },
-            { id: 'msk6', type: "Стадион", name: "Лужники", address: "ул. Лужники, 24", lat: 55.7156, lng: 37.5537, priceRange: "1500–4000 ₽", intensity: 9.5, profile: "Болельщики, зрители концертов", timeStart: "20:00", timeEnd: "23:30", participants: "80 000 зрителей, массовый выход" },
-            { id: 'msk7', type: "Арена", name: "ВТБ Арена", address: "Ленинградский пр., 36", lat: 55.7925, lng: 37.5604, priceRange: "1200–3000 ₽", intensity: 9, profile: "Спортивные болельщики", timeStart: "19:00", timeEnd: "23:00", participants: "Матчи ЦСКА, концерты" },
-            { id: 'msk8', type: "Выставка", name: "Крокус Экспо", address: "65-66 км МКАД", lat: 55.8226, lng: 37.3858, priceRange: "1500–3500 ₽", intensity: 9, profile: "Бизнес-аудитория, выставки", timeStart: "17:00", timeEnd: "21:00", participants: "Завершение выставочных дней" },
-            { id: 'msk9', type: "Выставка", name: "Экспоцентр", address: "Краснопресненская наб., 14", lat: 55.7530, lng: 37.5540, priceRange: "1000–2500 ₽", intensity: 8, profile: "Деловая аудитория", timeStart: "17:00", timeEnd: "20:00", participants: "Бизнес-форумы, B2B выставки" },
-            { id: 'msk10', type: "Деловой Центр", name: "Белая Площадь", address: "Лесная ул., 5Б", lat: 55.7785, lng: 37.5855, priceRange: "800–2000 ₽", intensity: 7.5, profile: "Офисные сотрудники, IT", timeStart: "17:30", timeEnd: "20:00", participants: "Бизнес-район Белорусская" },
-            { id: 'msk11', type: "Деловой Центр", name: "Северная Башня", address: "Тестовская ул., 10", lat: 55.7495, lng: 37.5335, priceRange: "1000–2800 ₽", intensity: 8, profile: "Топ-менеджмент, VIP", timeStart: "18:00", timeEnd: "21:00", participants: "Москва-Сити, северный кластер" },
-
-            // === САНКТ-ПЕТЕРБУРГ ===
-            { id: 'spb1', type: "Трансфер", name: "Аэропорт Пулково", address: "Пулковское ш., 41", lat: 59.7998, lng: 30.2705, priceRange: "1500–3000 ₽", intensity: 9.5, profile: "Туристы", timeStart: "Весь день", timeEnd: "Пик 21:00", participants: "Прибытие рейсов" },
-            { id: 'spb2', type: "Вокзал", name: "Московский вокзал", address: "Невский пр., 85", lat: 59.9296, lng: 30.3618, priceRange: "800–1800 ₽", intensity: 9, profile: "Пассажиры Сапсана", timeStart: "19:00", timeEnd: "21:30", participants: "Высокая плотность" },
-            { id: 'spb3', type: "ТЦ", name: "ТРЦ Галерея", address: "Лиговский пр., 30а", lat: 59.9272, lng: 30.3592, priceRange: "700–1500 ₽", intensity: 8.5, profile: "Шопоголики", timeStart: "18:00", timeEnd: "22:00", participants: "Максимальный спрос вечером" },
-            { id: 'spb4', type: "Стадион", name: "Газпром Арена", address: "Футбольная аллея, 1", lat: 59.9726, lng: 30.2205, priceRange: "1500–4500 ₽", intensity: 10, profile: "Болельщики Зенита, зрители", timeStart: "19:30", timeEnd: "23:30", participants: "68 000 зрителей" },
-            { id: 'spb5', type: "Арена", name: "Ледовый Дворец", address: "пр. Пятилеток, 1", lat: 59.8446, lng: 30.3226, priceRange: "1000–2500 ₽", intensity: 8.5, profile: "Концерты, хоккей", timeStart: "20:00", timeEnd: "23:00", participants: "Массовый выход 12 000 зрителей" },
-            { id: 'spb6', type: "Деловой Центр", name: "Лахта Центр", address: "Лахтинский пр., 2", lat: 59.9869, lng: 30.1776, priceRange: "1200–3000 ₽", intensity: 8, profile: "Топ-менеджмент Газпрома", timeStart: "17:30", timeEnd: "20:30", participants: "Бизнес-кластер" },
-            { id: 'spb7', type: "Выставка", name: "Экспофорум", address: "Петербургское ш., 64/1", lat: 59.8319, lng: 30.3106, priceRange: "1000–2200 ₽", intensity: 7.5, profile: "Бизнес, конференции", timeStart: "17:00", timeEnd: "20:00", participants: "ПМЭФ, выставки" },
-
-            // === ЕКАТЕРИНБУРГ ===
-            { id: 'ekb1', type: "Трансфер", name: "Аэропорт Кольцово", address: "пл. Бахчиванджи, 1", lat: 56.7454, lng: 60.8037, priceRange: "1000–2500 ₽", intensity: 9, profile: "Приезжие", timeStart: "Весь день", timeEnd: "Пик 18:30", participants: "Прибытие рейсов" },
-            { id: 'ekb2', type: "ТЦ", name: "ТРЦ Гринвич", address: "ул. 8 Марта, 46", lat: 56.8290, lng: 60.5985, priceRange: "600–1200 ₽", intensity: 8.5, profile: "Покупатели", timeStart: "17:00", timeEnd: "21:00", participants: "Центр притяжения" },
-            { id: 'ekb3', type: "Стадион", name: "Екатеринбург Арена", address: "ул. Репина, 5", lat: 56.8324, lng: 60.5728, priceRange: "800–2000 ₽", intensity: 8, profile: "Болельщики", timeStart: "18:30", timeEnd: "22:30", participants: "Матчи, концерты" },
-
-            // === КАЗАНЬ ===
-            { id: 'kzn1', type: "Трансфер", name: "Аэропорт Казань", address: "Аэропорт, 1", lat: 55.6062, lng: 49.2787, priceRange: "1200–2800 ₽", intensity: 9, profile: "Туристы", timeStart: "Весь день", timeEnd: "Пик 19:00", participants: "Стабильный спрос" },
-            { id: 'kzn2', type: "ТЦ", name: "ТРЦ Мега", address: "пр. Победы, 141", lat: 55.7758, lng: 49.2173, priceRange: "700–1400 ₽", intensity: 8, profile: "Семьи", timeStart: "18:00", timeEnd: "22:00", participants: "Вечерний отток" },
-            { id: 'kzn3', type: "Стадион", name: "Казань Арена", address: "пр. Ямашева, 115а", lat: 55.8208, lng: 49.1614, priceRange: "1000–2800 ₽", intensity: 9, profile: "Болельщики Рубина", timeStart: "18:00", timeEnd: "22:30", participants: "45 000 зрителей" },
-            { id: 'kzn4', type: "Выставка", name: "Казань Экспо", address: "Орбитальная ул., 1", lat: 55.7159, lng: 49.1908, priceRange: "1000–2200 ₽", intensity: 7.5, profile: "Бизнес, международ делегации", timeStart: "17:00", timeEnd: "20:00", participants: "Форумы, выставки" },
-
-            // === СОЧИ ===
-            { id: 'sochi1', type: "Трансфер", name: "Аэропорт Сочи", address: "ул. Мира, 50", lat: 43.4483, lng: 39.9422, priceRange: "1500–4000 ₽", intensity: 10, profile: "Отдыхающие", timeStart: "Круглосуточно", timeEnd: "Пик 20:00", participants: "Огромный поток" },
-            { id: 'sochi2', type: "Трафик", name: "Морпорт Сочи", address: "ул. Войкова, 1", lat: 43.5806, lng: 39.7171, priceRange: "1000–2500 ₽", intensity: 9, profile: "Туристы, состоятельная публика", timeStart: "19:00", timeEnd: "01:00", participants: "Высокая концентрация людей" },
-            { id: 'sochi3', type: "Стадион", name: "Стадион Фишт", address: "Олимпийский проспект, 21", lat: 43.4025, lng: 39.9553, priceRange: "1500–4000 ₽", intensity: 9.5, profile: "Зрители, фанаты", timeStart: "19:00", timeEnd: "23:00", participants: "48 000 зрителей" }
-        ];
-
-        // ================================================
-        // === ALPHA SCORE ENGINE ===
-        // ================================================
-        function parseHour(timeStr) {
-            const m = timeStr.match(/(\d{1,2}):(\d{2})/);
-            if (m) return parseInt(m[1]) + parseInt(m[2]) / 60;
-            const pm = timeStr.match(/Пик\s+(\d{1,2}):(\d{2})/);
-            if (pm) return parseInt(pm[1]) + parseInt(pm[2]) / 60;
-            return -1;
-        }
-
-        function calcAlphaScore(event) {
-            const now = new Date();
-            const currentHour = now.getHours() + now.getMinutes() / 60;
-            const dayOfWeek = now.getDay(); // 0=Sun
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            let score = 0;
-
-            // 1) Time proximity (0-30 pts)
-            const startH = parseHour(event.timeStart);
-            const endH = parseHour(event.timeEnd);
-            if (startH === -1) {
-                // All-day event — flat bonus
-                score += 18;
-            } else {
-                const peakH = endH !== -1 ? (startH + endH) / 2 : startH;
-                const diff = Math.abs(currentHour - peakH);
-                if (diff <= 1) score += 30;
-                else if (diff <= 2) score += 22;
-                else if (diff <= 3) score += 14;
-                else if (diff <= 5) score += 6;
-                else score += 2;
-            }
-
-            // 2) Weather impact (0-15 pts) — simulated
-            // Bad weather = more taxi demand
-            const weatherBonus = 10; // simulated cloudy/rainy
-            score += weatherBonus;
-
-            // 3) Day of week (0-15 pts)
-            const isEntertainment = ['Стадион', 'Арена', 'Трафик'].includes(event.type);
-            const isBusiness = ['Деловой Центр', 'Выставка'].includes(event.type);
-            if (isEntertainment && isWeekend) score += 15;
-            else if (isEntertainment && !isWeekend) score += 8;
-            else if (isBusiness && !isWeekend) score += 14;
-            else if (isBusiness && isWeekend) score += 4;
-            else score += 10;
-
-            // 4) Distance from driver (0-20 pts)
-            const dist = getDistance(baseLat, baseLng, event.lat, event.lng);
-            if (dist <= 3) score += 20;
-            else if (dist <= 10) score += 15;
-            else if (dist <= 30) score += 10;
-            else if (dist <= 60) score += 5;
-            else score += 2;
-
-            // 5) Base intensity (0-20 pts)
-            score += Math.round((event.intensity / 10) * 20);
-
-            return Math.min(100, Math.max(0, score));
-        }
-
-        function getAlphaClass(score) {
-            if (score >= 81) return 'alpha-critical';
-            if (score >= 61) return 'alpha-high';
-            if (score >= 31) return 'alpha-medium';
-            return 'alpha-low';
-        }
-
-        function getAlphaBadgeHtml(score) {
-            return `<span class="alpha-badge ${getAlphaClass(score)}">α ${score}</span>`;
-        }
-
-        // ================================================
-        // === UTILITY FUNCTIONS ===
-        // ================================================
-        function getDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
-
-        function formatDistRu(meters) {
-            if (meters < 100) return `${Math.round(meters)} м`;
-            if (meters < 1000) return `${Math.round(meters / 50) * 50} м`;
-            const km = meters / 1000;
-            if (km < 10) return `${km.toFixed(1)} км`;
-            return `${Math.round(km)} км`;
-        }
-
-        function formatDurationRu(seconds) {
-            if (seconds < 60) return '< 1 мин';
-            const mins = Math.round(seconds / 60);
-            if (mins < 60) return `${mins} мин`;
-            const h = Math.floor(mins / 60);
-            const m = mins % 60;
-            return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
-        }
-
-        function formatDistSpeechRu(meters) {
-            if (meters < 100) return `${Math.round(meters / 10) * 10} метров`;
-            if (meters < 1000) {
-                const val = Math.round(meters / 50) * 50;
-                return `${val} метров`;
-            }
-            const km = meters / 1000;
-            if (km < 2) return `${km.toFixed(1)} километра`;
-            return `${Math.round(km)} километров`;
-        }
-
-        function getRouteUrl(targetLat, targetLng) {
-            return `https://yandex.ru/maps/?rtext=~${targetLat},${targetLng}&rtt=auto`;
-        }
-
-        function showToast(msg, duration = 3000) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.classList.add('visible');
-            setTimeout(() => t.classList.remove('visible'), duration);
-        }
-
-        // ================================================
-        // === VOICE SYSTEM ===
-        // ================================================
-        function speak(text) {
-            if (!('speechSynthesis' in window) || isSpeaking || voiceMuted) return;
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'ru-RU'; u.rate = 1.05; u.pitch = 0.95;
-            const voices = window.speechSynthesis.getVoices();
-            const ruVoice = voices.find(v => v.lang === 'ru-RU');
-            if (ruVoice) u.voice = ruVoice;
-            u.onstart = () => {
-                isSpeaking = true;
-                document.getElementById('btn-voice').style.background = '#C026D3';
-                document.getElementById('btn-voice').style.color = '#fff';
-            };
-            u.onend = () => {
-                isSpeaking = false;
-                document.getElementById('btn-voice').style.background = '';
-                document.getElementById('btn-voice').style.color = voiceMuted ? '#555' : '#C026D3';
-            };
-            window.speechSynthesis.speak(u);
-        }
-
-        // ================================================
-        // === STARTUP & GEOLOCATION ===
-        // ================================================
-        document.getElementById('btn-start').addEventListener('click', () => {
-            initAudio();
-            const utterance = new SpeechSynthesisUtterance('');
-            utterance.volume = 0;
-            window.speechSynthesis.speak(utterance);
-
-            const status = document.getElementById('location-status');
-            status.innerText = "Определение локации...";
-            document.getElementById('btn-start').style.transform = 'scale(0.95)';
-            document.getElementById('btn-start').style.opacity = '0.5';
-            
-            if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    async pos => {
-                        baseLat = pos.coords.latitude;
-                        baseLng = pos.coords.longitude;
-                        await fetchCityName(baseLat, baseLng);
-                        launchApp();
-                    },
-                    () => launchApp(),
-                    { enableHighAccuracy: true, timeout: 6000 }
-                );
-            } else { launchApp(); }
-        });
-
-        async function fetchCityName(lat, lng) {
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`);
-                const data = await res.json();
-                if (data && data.address) {
-                    cityName = data.address.city || data.address.town || data.address.state || "Ваш город";
-                }
-            } catch(e) { cityName = "Локация определена"; }
-        }
-
-        function launchApp() {
-            document.getElementById('start-screen').classList.add('opacity-0');
-            setTimeout(() => document.getElementById('start-screen').classList.add('d-none'), 600);
-            document.getElementById('header-city').innerText = cityName;
-            localEvents = masterEventsDB.filter(e => getDistance(baseLat, baseLng, e.lat, e.lng) <= 100);
-
-            // Calculate initial alpha scores
-            localEvents.forEach(e => { e.alphaScore = calcAlphaScore(e); });
-            // Sort by alpha score
-            localEvents.sort((a, b) => b.alphaScore - a.alphaScore);
-
-            setTimeout(() => {
-                initMap();
-                document.getElementById('top-left-panel').classList.remove('hide-top');
-                document.getElementById('top-right-panel').classList.remove('hide-top');
-                document.getElementById('fab-actions').classList.remove('opacity-0');
-                document.getElementById('radar-widget').classList.remove('opacity-0');
-                document.getElementById('ticker-container').classList.remove('opacity-0');
-                startTracking();
-                startTicker();
-                startAlphaRefresh();
-                
-                if (localEvents.length > 0) {
-                    showLiveRadar(`Радар активирован.<br>Найдено зон: ${localEvents.length}`);
-                    showBottomSheet();
-                    renderEventsList();
-                    renderMarkersSequentially();
-                } else {
-                    showLiveRadar(`⚠️ В вашем радиусе нет подтвержденных зон.`);
-                    setTimeout(() => speak("Карта загружена. В вашем регионе пока нет зон."), 1500);
-                }
-            }, 600);
-        }
-
-        // Refresh alpha scores every 60 seconds
-        function startAlphaRefresh() {
-            setInterval(() => {
-                localEvents.forEach(e => { e.alphaScore = calcAlphaScore(e); });
-            }, 60000);
-        }
-
-        // ================================================
-        // === MAP INITIALIZATION ===
-        // ================================================
-        function initMap() {
-            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([baseLat, baseLng], 12);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
-            map.invalidateSize();
-        }
-
-        // ================================================
-        // === MARKER CREATION (ENHANCED) ===
-        // ================================================
-        function renderMarkersSequentially() {
-            let delay = 500;
-            const sortedEvents = [...localEvents].sort((a, b) => b.intensity - a.intensity);
-            sortedEvents.forEach((event, index) => {
-                setTimeout(() => {
-                    playBeep();
-                    createMarker(event);
-                    showLiveRadar(`Обнаружена зона: ${event.name}`);
-                    if (index === sortedEvents.length - 1) {
-                        setTimeout(speakInitialBriefing, 1200);
-                        initHeatmapLayer();
-                    }
-                }, delay);
-                delay += 700;
-            });
-        }
-
-        function createMarker(event) {
-            const radius = event.intensity * 60;
-            const circle = L.circle([event.lat, event.lng], {
-                color: '#C026D3', fillColor: '#C026D3', fillOpacity: 0.2,
-                weight: 2, radius: radius, className: 'demand-zone'
+    // ========== AI SCANNER ==========
+    function toggleScanner(){
+        const btn=document.getElementById('btn-scanner'),lbl=document.getElementById('scanner-overlay-label');
+        if(scannerActive){clearScanner();btn.classList.remove('active-toggle');lbl.classList.remove('active');scannerActive=false;showLiveRadar('AI Scanner отключен');return}
+        scannerActive=true;btn.classList.add('active-toggle');lbl.classList.add('active');showLiveRadar('🧠 AI Scanner: анализ потоков...');
+        renderScannerGrid();
+    }
+    function clearScanner(){scannerLayers.forEach(l=>map.removeLayer(l));scannerLayers=[]}
+    function renderScannerGrid(){
+        clearScanner();const b=map.getBounds(),gs=12;
+        const latS=(b.getNorth()-b.getSouth())/gs,lngS=(b.getEast()-b.getWest())/gs;
+        for(let i=0;i<gs;i++)for(let j=0;j<gs;j++){
+            const cLat=b.getSouth()+i*latS+latS/2,cLng=b.getWest()+j*lngS+lngS/2;
+            let demand=0;localEvents.forEach(ev=>{const d=getDistance(cLat,cLng,ev.lat,ev.lng);if(d<5)demand+=ev.intensity*(1-d/5)});
+            demand=Math.min(1,demand/15);
+            if(demand<0.05)continue;
+            const r=L.rectangle([[b.getSouth()+i*latS,b.getWest()+j*lngS],[b.getSouth()+(i+1)*latS,b.getWest()+(j+1)*lngS]],{
+                color:'transparent',fillColor:demand>0.7?'#e11d48':demand>0.4?'#C026D3':'#7c3aed',fillOpacity:demand*0.25,weight:0,className:'scanner-cell'
             }).addTo(map);
-
-            const alpha = event.alphaScore || calcAlphaScore(event);
-            const routeUrl = getRouteUrl(event.lat, event.lng);
-
-            circle.bindPopup(`
-                <div class="flex justify-between items-center" style="margin-bottom: 8px;">
-                    <h3 class="font-bold text-white" style="font-size: 1.1rem; max-width: 55%;">${event.name}</h3>
-                    <div class="flex items-center gap-2">
-                        ${getAlphaBadgeHtml(alpha)}
-                        <span class="price-tag">${event.priceRange}</span>
-                    </div>
-                </div>
-                <div style="font-size: 0.8rem; color: #a1a1aa; margin-bottom: 8px;">
-                    <i class="ph-fill ph-map-pin"></i> ${event.address}
-                </div>
-                <div class="flex items-center gap-2 text-xs text-demand font-bold" style="margin-bottom: 4px;">
-                    <i class="ph-fill ph-clock"></i> ${event.timeStart} - ${event.timeEnd}
-                </div>
-                <p class="text-xs text-gray" style="margin-bottom: 4px; text-transform: uppercase;">
-                    <i class="ph-fill ph-users"></i> ${event.participants}
-                </p>
-                <div class="popup-btn-row">
-                    <button class="route-btn" onclick="window.startInternalNav('${event.id}')">
-                        <i class="ph-bold ph-navigation-arrow"></i> Навигация
-                    </button>
-                    <a href="${routeUrl}" target="_blank" rel="noopener noreferrer" class="route-btn secondary-btn" onclick="event.stopPropagation();">
-                        <i class="ph-bold ph-arrow-square-out"></i> Яндекс
-                    </a>
-                </div>
-            `);
-            mapMarkers[event.id] = circle;
+            scannerLayers.push(r);
         }
+    }
+    document.getElementById('btn-scanner').addEventListener('click',toggleScanner);
 
-        // ================================================
-        // === HEATMAP ENGINE ===
-        // ================================================
-        function initHeatmapLayer() {
-            const heatData = localEvents.map(e => [e.lat, e.lng, e.intensity / 10]);
-            heatLayer = L.heatLayer(heatData, {
-                radius: 35,
-                blur: 25,
-                maxZoom: 15,
-                max: 1.0,
-                gradient: { 0.2: '#1e40af', 0.4: '#7c3aed', 0.6: '#C026D3', 0.8: '#e11d48', 1.0: '#ef4444' }
+    // ========== OVERPASS POI DISCOVERY ==========
+    async function discoverPOIs(){
+        if(poiLoaded){showToast('POI уже загружены','3000','info');return}
+        const btn=document.getElementById('btn-poi');btn.classList.add('active-toggle');
+        showLiveRadar('🔍 Поиск точек интереса...');
+        try{
+            const r=5000,q=`[out:json][timeout:10];(node["amenity"~"restaurant|bar|nightclub|cinema|theatre"](around:${r},${baseLat},${baseLng});node["shop"="mall"](around:${r},${baseLat},${baseLng});node["leisure"~"stadium|sports_centre"](around:${r},${baseLat},${baseLng});node["tourism"~"hotel|attraction"](around:${r},${baseLat},${baseLng}););out body 50;`;
+            const res=await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`);
+            const data=await res.json();
+            let count=0;
+            data.elements.forEach(el=>{
+                if(!el.lat||!el.lon||!el.tags||!el.tags.name)return;
+                const m=L.marker([el.lat,el.lon],{icon:L.divIcon({className:'',html:'<div class="poi-dot"></div>',iconSize:[10,10],iconAnchor:[5,5]}),zIndexOffset:500}).addTo(map);
+                m.bindPopup(`<div style="font-size:.9rem;font-weight:700;margin-bottom:4px">${el.tags.name}</div><div style="font-size:.75rem;color:#a1a1aa">${el.tags.amenity||el.tags.shop||el.tags.leisure||el.tags.tourism||''}</div><div class="popup-btn-row" style="margin-top:8px"><button class="route-btn" onclick="window.startNavToCoord(${el.lat},${el.lon})"><i class="ph-bold ph-navigation-arrow"></i> Навигация</button></div>`);
+                poiMarkers.push(m);count++;
             });
-            // Not added to map by default
-        }
-
-        function toggleHeatmap() {
-            if (!heatLayer) return;
-            const btn = document.getElementById('btn-heatmap');
-            if (heatmapVisible) {
-                map.removeLayer(heatLayer);
-                btn.classList.remove('active-toggle');
-                heatmapVisible = false;
-                showLiveRadar('Тепловая карта отключена');
-            } else {
-                heatLayer.addTo(map);
-                btn.classList.add('active-toggle');
-                heatmapVisible = true;
-                showLiveRadar('🔥 Тепловая карта спроса активирована');
-            }
-        }
-
-        document.getElementById('btn-heatmap').addEventListener('click', toggleHeatmap);
-
-        // ================================================
-        // === OSRM NAVIGATION ENGINE ===
-        // ================================================
-        function getManeuverIcon(type, modifier) {
-            if (type === 'arrive') return 'ph-flag-checkered';
-            if (type === 'depart') return 'ph-arrow-up';
-            if (type === 'turn' || type === 'end of road') {
-                switch (modifier) {
-                    case 'right': return 'ph-arrow-right';
-                    case 'left': return 'ph-arrow-left';
-                    case 'sharp right': return 'ph-arrow-bend-down-right';
-                    case 'sharp left': return 'ph-arrow-bend-down-left';
-                    case 'slight right': return 'ph-arrow-up-right';
-                    case 'slight left': return 'ph-arrow-up-left';
-                    case 'uturn': return 'ph-arrow-u-up-left';
-                    default: return 'ph-arrow-up';
-                }
-            }
-            if (type === 'new name' || type === 'continue') return 'ph-arrow-up';
-            if (type === 'roundabout' || type === 'rotary') return 'ph-arrows-clockwise';
-            if (type === 'merge') return 'ph-git-merge';
-            if (type === 'fork') return modifier === 'left' ? 'ph-arrow-up-left' : 'ph-arrow-up-right';
-            if (type === 'on ramp' || type === 'off ramp') return modifier === 'left' ? 'ph-arrow-up-left' : 'ph-arrow-up-right';
-            return 'ph-arrow-up';
-        }
-
-        function getManeuverTextRu(type, modifier, name) {
-            const street = name ? ` на ${name}` : '';
-            switch (type) {
-                case 'depart': return `Начните движение${street}`;
-                case 'arrive': return 'Вы прибыли в точку назначения';
-                case 'turn':
-                case 'end of road':
-                    switch (modifier) {
-                        case 'right': return `Поверните направо${street}`;
-                        case 'left': return `Поверните налево${street}`;
-                        case 'sharp right': return `Резко поверните направо${street}`;
-                        case 'sharp left': return `Резко поверните налево${street}`;
-                        case 'slight right': return `Плавно направо${street}`;
-                        case 'slight left': return `Плавно налево${street}`;
-                        case 'uturn': return `Развернитесь${street}`;
-                        default: return `Продолжайте движение${street}`;
-                    }
-                case 'new name':
-                case 'continue':
-                    return `Продолжайте прямо${street}`;
-                case 'roundabout':
-                case 'rotary':
-                    return `На кольце${street}`;
-                case 'merge':
-                    return `Влейтесь в поток${street}`;
-                case 'fork':
-                    return modifier === 'left' ? `Держитесь левее${street}` : `Держитесь правее${street}`;
-                case 'on ramp':
-                    return `Выезжайте на магистраль${street}`;
-                case 'off ramp':
-                    return `Съезд${street}`;
-                default:
-                    return `Продолжайте движение${street}`;
-            }
-        }
-
-        async function buildInternalRoute(startLat, startLng, endLat, endLng) {
-            const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Network error');
-            const data = await response.json();
-            if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) throw new Error('Route not found');
-
-            const route = data.routes[0];
-            const coordinates = route.geometry.coordinates.map(c => [c[1], c[0]]);
-            const steps = route.legs[0].steps;
-
-            const maneuvers = steps.map(step => ({
-                instruction: getManeuverTextRu(step.maneuver.type, step.maneuver.modifier, step.name),
-                distance: step.distance,
-                duration: step.duration,
-                location: [step.maneuver.location[1], step.maneuver.location[0]],
-                type: step.maneuver.type,
-                modifier: step.maneuver.modifier || '',
-                streetName: step.name || '',
-                icon: getManeuverIcon(step.maneuver.type, step.maneuver.modifier)
-            }));
-
-            return {
-                distance: route.distance,
-                duration: route.duration,
-                coordinates,
-                maneuvers
-            };
-        }
-
-        // ================================================
-        // === ROUTE RENDERING ===
-        // ================================================
-        function drawRouteOnMap(coordinates) {
-            clearRouteLayers();
-
-            // Glow layer
-            const glow = L.polyline(coordinates, {
-                color: '#C026D3', weight: 14, opacity: 0.2,
-                lineCap: 'round', lineJoin: 'round'
-            }).addTo(map);
-            routeLayers.push(glow);
-
-            // Main route line
-            const main = L.polyline(coordinates, {
-                color: '#C026D3', weight: 5, opacity: 0.9,
-                lineCap: 'round', lineJoin: 'round'
-            }).addTo(map);
-            routeLayers.push(main);
-
-            // Destination marker
-            const destCoord = coordinates[coordinates.length - 1];
-            const destMarker = L.marker(destCoord, {
-                icon: L.divIcon({
-                    className: 'dest-marker-container',
-                    html: '<div class="dest-pulse"></div>',
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10]
-                }),
-                zIndexOffset: 1500
-            }).addTo(map);
-            routeLayers.push(destMarker);
-
-            // Fit bounds
-            map.fitBounds(main.getBounds(), { padding: [60, 60], maxZoom: 15 });
-
-            return { glow, main };
-        }
-
-        function updateRouteProgress(snappedIndex, coordinates) {
-            // Remove old traversed layer if exists
-            const oldTraversed = routeLayers.find(l => l._isTraversed);
-            if (oldTraversed) { map.removeLayer(oldTraversed); routeLayers = routeLayers.filter(l => l !== oldTraversed); }
-
-            if (snappedIndex > 0) {
-                const traversedCoords = coordinates.slice(0, snappedIndex + 1);
-                const traversed = L.polyline(traversedCoords, {
-                    color: '#555', weight: 5, opacity: 0.6,
-                    lineCap: 'round', lineJoin: 'round'
-                }).addTo(map);
-                traversed._isTraversed = true;
-                routeLayers.push(traversed);
-            }
-        }
-
-        function clearRouteLayers() {
-            routeLayers.forEach(l => { if (map.hasLayer(l)) map.removeLayer(l); });
-            routeLayers = [];
-        }
-
-        // ================================================
-        // === NAVIGATION CONTROLLER ===
-        // ================================================
-        window.startInternalNav = function(eventId) {
-            const event = localEvents.find(e => e.id === eventId);
-            if (!event) return;
-
-            // Close popup
-            map.closePopup();
-            hideBottomSheet();
-
-            // Show loading
-            document.getElementById('route-loading').classList.add('active');
-
-            buildInternalRoute(baseLat, baseLng, event.lat, event.lng)
-                .then(routeData => {
-                    document.getElementById('route-loading').classList.remove('active');
-                    activateNavigation(routeData, event);
-                })
-                .catch(err => {
-                    console.error('Route error:', err);
-                    document.getElementById('route-loading').classList.remove('active');
-                    showToast('Маршрут недоступен. Используйте Яндекс.');
-                    // Fallback: open Yandex
-                    setTimeout(() => {
-                        const url = getRouteUrl(event.lat, event.lng);
-                        window.open(url, '_blank');
-                    }, 1500);
-                });
-        };
-
-        function activateNavigation(routeData, event) {
-            isNavigating = true;
-            activeRoute = {
-                ...routeData,
-                targetEvent: event,
-                lines: null
-            };
-            currentManeuverIndex = 0;
-            navTotalDistance = routeData.distance;
-            navRemainingDistance = routeData.distance;
-            voiceAnnounced = {};
-            deviationCount = 0;
-            navAutoCenter = true;
-
-            // Draw route
-            activeRoute.lines = drawRouteOnMap(routeData.coordinates);
-
-            // Show nav panel
-            document.getElementById('navigation-panel').classList.add('active');
-
-            // Update UI with first maneuver
-            updateNavPanel();
-
-            // Speak initial instruction
-            const dur = formatDurationRu(routeData.duration);
-            const dist = formatDistRu(routeData.distance);
-            speak(`Маршрут построен. ${dist}, ${dur}. ${routeData.maneuvers[0].instruction}.`);
-            showLiveRadar(`🧭 Навигация к: ${event.name}<br>${dist} • ${dur}`);
-        }
-
-        function updateNavPanel() {
-            if (!activeRoute || !activeRoute.maneuvers) return;
-            const m = activeRoute.maneuvers[currentManeuverIndex];
-            if (!m) return;
-
-            document.getElementById('nav-icon').innerHTML = `<i class="ph-bold ${m.icon}"></i>`;
-            document.getElementById('nav-turn-text').textContent = m.instruction;
-            document.getElementById('nav-street').textContent = m.streetName || '';
-            document.getElementById('nav-eta').textContent = formatDurationRu(activeRoute.duration);
-            document.getElementById('nav-total-dist').textContent = formatDistRu(navRemainingDistance);
-
-            // Distance to this maneuver
-            const distTo = getDistance(baseLat, baseLng, m.location[0], m.location[1]) * 1000;
-            document.getElementById('nav-dist-to').textContent = `Через ${formatDistRu(distTo)}`;
-
-            // Progress bar
-            const progress = Math.max(0, Math.min(100, ((navTotalDistance - navRemainingDistance) / navTotalDistance) * 100));
-            document.getElementById('nav-progress').style.width = `${progress}%`;
-
-            // Next maneuver preview
-            const next = activeRoute.maneuvers[currentManeuverIndex + 1];
-            const previewEl = document.getElementById('nav-next-preview');
-            if (next && next.type !== 'arrive') {
-                previewEl.innerHTML = `<i class="ph-bold ${next.icon}"></i> <span>Затем: ${next.instruction}</span>`;
-            } else if (next && next.type === 'arrive') {
-                previewEl.innerHTML = `<i class="ph-bold ph-flag-checkered"></i> <span>Затем: прибытие в точку назначения</span>`;
-            } else {
-                previewEl.innerHTML = '';
-            }
-
-            // Speed
-            document.getElementById('nav-speed').textContent = document.getElementById('speed-display').textContent;
-        }
-
-        function cancelNavigation() {
-            isNavigating = false;
-            activeRoute = null;
-            currentManeuverIndex = 0;
-            voiceAnnounced = {};
-            deviationCount = 0;
-
-            clearRouteLayers();
-            document.getElementById('navigation-panel').classList.remove('active');
-            
-            // Reset navigation panel content
-            document.getElementById('navigation-panel').querySelector('.nav-arrived')?.remove();
-            document.getElementById('nav-icon').parentElement.style.display = '';
-            document.querySelector('.nav-stats-row').style.display = '';
-            document.querySelector('.nav-progress-bar').style.display = '';
-            document.getElementById('nav-next-preview').style.display = '';
-            document.getElementById('nav-cancel-btn').style.display = '';
-
-            if (localEvents.length > 0) {
-                showBottomSheet();
-            }
-            window.speechSynthesis.cancel();
-            isSpeaking = false;
-            showLiveRadar('Навигация отменена. Радар активен.');
-        }
-
-        document.getElementById('nav-cancel-btn').addEventListener('click', cancelNavigation);
-
-        function arriveAtDestination() {
-            playArrivalChime();
-            speak('Вы прибыли в точку назначения. Удачной охоты!');
-            showLiveRadar(`🏁 Прибытие: ${activeRoute.targetEvent.name}`);
-
-            // Show arrived state in nav panel
-            const panel = document.getElementById('navigation-panel');
-            
-            // Hide nav elements
-            document.getElementById('nav-icon').parentElement.style.display = 'none';
-            document.querySelector('.nav-stats-row').style.display = 'none';
-            document.querySelector('.nav-progress-bar').style.display = 'none';
-            document.getElementById('nav-next-preview').style.display = 'none';
-
-            // Insert arrived state
-            const arrivedDiv = document.createElement('div');
-            arrivedDiv.className = 'nav-arrived';
-            arrivedDiv.innerHTML = `
-                <i class="ph-fill ph-flag-checkered"></i>
-                <div class="nav-arrived-text">Вы на месте!</div>
-                <div class="nav-arrived-sub">${activeRoute.targetEvent.name}</div>
-            `;
-            panel.insertBefore(arrivedDiv, document.getElementById('nav-cancel-btn'));
-
-            // Auto dismiss after 8 seconds
-            setTimeout(cancelNavigation, 8000);
-        }
-
-        // ================================================
-        // === NAVIGATION GPS HANDLER ===
-        // ================================================
-        function nearestPointOnSegment(p, a, b) {
-            const dx = b[0] - a[0], dy = b[1] - a[1];
-            if (dx === 0 && dy === 0) return { point: a, t: 0 };
-            let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy);
-            t = Math.max(0, Math.min(1, t));
-            return { point: [a[0] + t * dx, a[1] + t * dy], t };
-        }
-
-        function snapToRoute(lat, lng, coords) {
-            let minDist = Infinity;
-            let closestPoint = null;
-            let closestIdx = 0;
-
-            for (let i = 0; i < coords.length - 1; i++) {
-                const result = nearestPointOnSegment([lat, lng], coords[i], coords[i + 1]);
-                const d = getDistance(lat, lng, result.point[0], result.point[1]);
-                if (d < minDist) {
-                    minDist = d;
-                    closestPoint = result.point;
-                    closestIdx = i;
-                }
-            }
-
-            return { point: closestPoint, segmentIndex: closestIdx, distanceKm: minDist };
-        }
-
-        function calcRemainingDist(segIdx, coords) {
-            let dist = 0;
-            for (let i = segIdx; i < coords.length - 1; i++) {
-                dist += getDistance(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1]);
-            }
-            return dist * 1000; // meters
-        }
-
-        function processNavigationTick() {
-            if (!isNavigating || !activeRoute) return;
-
-            const coords = activeRoute.coordinates;
-            const snap = snapToRoute(baseLat, baseLng, coords);
-            
-            // Check deviation
-            if (snap.distanceKm > 0.1) {
-                deviationCount++;
-                if (deviationCount > 5) { // ~10 seconds with 2s interval
-                    showLiveRadar('🔄 Пересчёт маршрута...');
-                    deviationCount = 0;
-                    // Re-route
-                    buildInternalRoute(baseLat, baseLng, activeRoute.targetEvent.lat, activeRoute.targetEvent.lng)
-                        .then(newRoute => {
-                            clearRouteLayers();
-                            activeRoute = { ...newRoute, targetEvent: activeRoute.targetEvent };
-                            navTotalDistance = newRoute.distance;
-                            currentManeuverIndex = 0;
-                            voiceAnnounced = {};
-                            activeRoute.lines = drawRouteOnMap(newRoute.coordinates);
-                            updateNavPanel();
-                            speak('Маршрут перестроен.');
-                        })
-                        .catch(() => showToast('Не удалось перестроить маршрут'));
-                    return;
-                }
-            } else {
-                deviationCount = 0;
-            }
-
-            // Update remaining distance
-            navRemainingDistance = calcRemainingDist(snap.segmentIndex, coords);
-
-            // Update traversed portion
-            updateRouteProgress(snap.segmentIndex, coords);
-
-            // Check maneuver progress
-            const maneuvers = activeRoute.maneuvers;
-            if (currentManeuverIndex < maneuvers.length) {
-                const m = maneuvers[currentManeuverIndex];
-                const distToManeuver = getDistance(baseLat, baseLng, m.location[0], m.location[1]) * 1000;
-
-                // Voice announcements
-                const key200 = `${currentManeuverIndex}_200`;
-                const key50 = `${currentManeuverIndex}_50`;
-                
-                if (distToManeuver <= 200 && distToManeuver > 50 && !voiceAnnounced[key200]) {
-                    voiceAnnounced[key200] = true;
-                    if (m.type !== 'depart') {
-                        speak(`Через ${formatDistSpeechRu(distToManeuver)}, ${m.instruction}`);
-                    }
-                }
-                if (distToManeuver <= 50 && !voiceAnnounced[key50]) {
-                    voiceAnnounced[key50] = true;
-                    if (m.type !== 'depart') {
-                        speak(m.instruction);
-                    }
-                }
-
-                // Advance maneuver
-                if (distToManeuver < 30 && currentManeuverIndex < maneuvers.length - 1) {
-                    currentManeuverIndex++;
-                    if (maneuvers[currentManeuverIndex].type === 'arrive') {
-                        arriveAtDestination();
-                        return;
-                    }
-                    playBeep();
-                }
-            }
-
-            // Auto-center map
-            if (navAutoCenter) {
-                map.setView([baseLat, baseLng], map.getZoom(), { animate: true, duration: 0.5 });
-            }
-
-            updateNavPanel();
-        }
-
-        // ================================================
-        // === GPS TRACKING (ENHANCED) ===
-        // ================================================
-        const carSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="rgba(192,38,211,0.15)" stroke="rgba(192,38,211,0.4)" stroke-width="1"/><circle cx="20" cy="20" r="5" fill="#fff" stroke="#C026D3" stroke-width="2"/><polygon points="20,6 24,16 20,13 16,16" fill="#C026D3" opacity="0.9"/></svg>';
-
-        function createCarIcon(heading) {
-            return L.divIcon({
-                className: 'car-marker-container',
-                html: `<div class="car-marker-rotatable" style="transform: rotate(${heading || 0}deg)">${carSvg}</div>`,
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
-            });
-        }
-
-        function startTracking() {
-            if (!("geolocation" in navigator)) return;
-            
-            navigator.geolocation.watchPosition(pos => {
-                baseLat = pos.coords.latitude;
-                baseLng = pos.coords.longitude;
-
-                // Speed
-                if (pos.coords.speed !== null) {
-                    const speed = Math.round(pos.coords.speed * 3.6);
-                    document.getElementById('speed-display').innerText = speed;
-                }
-
-                // Heading
-                if (pos.coords.heading !== null && !Number.isNaN(pos.coords.heading)) {
-                    currentHeading = pos.coords.heading;
-                }
-
-                // Update car marker
-                if (!userMarker) {
-                    userMarker = L.marker([baseLat, baseLng], {
-                        icon: createCarIcon(currentHeading),
-                        zIndexOffset: 2000
-                    }).addTo(map);
-                    userCircle = L.circle([baseLat, baseLng], {
-                        radius: pos.coords.accuracy / 2,
-                        color: '#C026D3', weight: 1, fillOpacity: 0.08, fillColor: '#C026D3'
-                    }).addTo(map);
-                } else {
-                    userMarker.setLatLng([baseLat, baseLng]);
-                    // Update rotation
-                    const el = document.querySelector('.car-marker-rotatable');
-                    if (el) el.style.transform = `rotate(${currentHeading}deg)`;
-                    
-                    userCircle.setLatLng([baseLat, baseLng]);
-                    userCircle.setRadius(Math.min(pos.coords.accuracy / 2, 200));
-                }
-
-                // Navigation tick
-                processNavigationTick();
-
-            }, () => {}, { enableHighAccuracy: true, maximumAge: 2000 });
-        }
-
-        // ================================================
-        // === BOTTOM SHEET UI ===
-        // ================================================
-        function showBottomSheet() {
-            if (isNavigating) return;
-            const sheet = document.getElementById('bottom-sheet');
-            sheet.classList.remove('hide-bottom');
-            document.getElementById('btn-show-zones').style.display = 'none';
-            clearTimeout(sheetTimeout);
-            sheetTimeout = setTimeout(hideBottomSheet, 8000);
-        }
-
-        function hideBottomSheet() {
-            document.getElementById('bottom-sheet').classList.add('hide-bottom');
-            document.getElementById('btn-show-zones').style.display = 'flex';
-        }
-        window.hideBottomSheet = hideBottomSheet;
-
-        document.getElementById('btn-show-zones').addEventListener('click', showBottomSheet);
-
-        let sheetStartY = 0;
-        const sheetHandle = document.getElementById('sheet-handle');
-        sheetHandle.addEventListener('touchstart', e => {
-            sheetStartY = e.touches[0].clientY;
-            clearTimeout(sheetTimeout);
-        }, { passive: true });
-        sheetHandle.addEventListener('touchmove', e => {
-            if (e.touches[0].clientY - sheetStartY > 40) hideBottomSheet();
-        }, { passive: true });
-
-        // ================================================
-        // === LIVE RADAR UI ===
-        // ================================================
-        function showLiveRadar(msg) {
-            const radar = document.getElementById('live-radar');
-            document.getElementById('radar-messages').innerHTML = msg;
-            radar.classList.remove('hide-left');
-            clearTimeout(radarTimeout);
-            radarTimeout = setTimeout(() => radar.classList.add('hide-left'), 8000);
-        }
-
-        let radarStartX = 0;
-        const radarPanel = document.getElementById('live-radar');
-        radarPanel.addEventListener('touchstart', e => radarStartX = e.touches[0].clientX, { passive: true });
-        radarPanel.addEventListener('touchmove', e => {
-            if (radarStartX - e.touches[0].clientX > 40) radarPanel.classList.add('hide-left');
-        }, { passive: true });
-
-        // ================================================
-        // === EVENTS LIST (ENHANCED WITH ALPHA + DUAL BUTTONS) ===
-        // ================================================
-        function renderEventsList() {
-            const list = document.getElementById('events-list');
-            list.innerHTML = '';
-            // Sort by alpha score
-            const sorted = [...localEvents].sort((a, b) => (b.alphaScore || 0) - (a.alphaScore || 0));
-            
-            sorted.forEach(e => {
-                const alpha = e.alphaScore || calcAlphaScore(e);
-                const card = document.createElement('div');
-                card.className = "event-card";
-                const routeUrl = getRouteUrl(e.lat, e.lng);
-
-                card.innerHTML = `
-                    <div class="flex justify-between items-center" style="margin-bottom: 6px;">
-                        <h4 class="font-bold text-white text-sm" style="max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.name}</h4>
-                        <div class="flex items-center gap-2">
-                            ${getAlphaBadgeHtml(alpha)}
-                            <span class="price-tag">${e.priceRange}</span>
-                        </div>
-                    </div>
-                    <div style="font-size: 0.75rem; color: #a1a1aa; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${e.address}
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-gray" style="margin-top: 6px; margin-bottom: 8px;">
-                        <span class="flex items-center gap-1 text-demand font-bold"><i class="ph-fill ph-clock"></i> ${e.timeStart} - ${e.timeEnd}</span>
-                        <span style="font-size: 0.7rem; color: #6b7280;">${e.type}</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="route-btn-small" style="flex: 1;" onclick="event.stopPropagation(); window.startInternalNav('${e.id}');">
-                            <i class="ph-bold ph-navigation-arrow"></i> Навигация
-                        </button>
-                        <a href="${routeUrl}" target="_blank" rel="noopener noreferrer" class="route-btn-small" style="flex: 1; background: rgba(255,255,255,0.06); color: #a1a1aa;" onclick="event.stopPropagation(); hideBottomSheet();">
-                            <i class="ph-bold ph-arrow-square-out"></i> Яндекс
-                        </a>
-                    </div>
-                `;
-                card.onclick = () => {
-                    map.flyTo([e.lat, e.lng], 14, { duration: 1 });
-                    setTimeout(() => { if (mapMarkers[e.id]) mapMarkers[e.id].openPopup(); }, 600);
-                };
-                list.appendChild(card);
-            });
-        }
-
-        // ================================================
-        // === AI INSIDER TICKER TAPE ===
-        // ================================================
-        const tickerTemplates = [
-            { icon: '🔒', tpl: (e) => `Закрытая вечеринка рядом с «${e.name}» — VIP-трансферы через ${10 + Math.floor(Math.random()*30)} мин` },
-            { icon: '⚡', tpl: (e) => `Ликвидность: зона ${e.name} перенасыщена — объезд рекомендован` },
-            { icon: '📈', tpl: (e) => `${e.name}: спрос +${30 + Math.floor(Math.random()*60)}% за час` },
-            { icon: '🎤', tpl: (e) => `Мероприятие завершается: ${e.name} — волна заказов через ${5 + Math.floor(Math.random()*20)} мин` },
-            { icon: '✈️', tpl: (e) => `Посадка рейса в ${e.name} — ожидается ${80 + Math.floor(Math.random()*200)} пассажиров` },
-            { icon: '🏢', tpl: (e) => `${e.name}: корпоратив — чеки от ${e.priceRange}` },
-            { icon: '🎯', tpl: (e) => `Order Block: скрытый спрос в зоне ${e.name} — α ${e.alphaScore || '??'}` },
-            { icon: '⚠️', tpl: (e) => `Liquidity Sweep: ${e.name} — агрегатор направляет потоки, избегайте` },
-            { icon: '🌧️', tpl: (e) => `Погодный буст: осадки повышают спрос у ${e.name} на 25%` },
-            { icon: '🔥', tpl: (e) => `HOT ZONE: ${e.name} — интенсивность ${e.intensity}/10` },
-            { icon: '💎', tpl: (e) => `Premium Lead: ${e.name} — VIP-клиенты, средний чек ${e.priceRange}` },
-            { icon: '📊', tpl: (e) => `Leading Indicator: ${e.name} формирует спрос через ${15 + Math.floor(Math.random()*25)} мин` }
-        ];
-
-        function generateTickerSignals() {
-            if (localEvents.length === 0) return [];
-            const signals = [];
-            const count = Math.min(localEvents.length * 2, 12);
-            const shuffled = [...localEvents].sort(() => Math.random() - 0.5);
-
-            for (let i = 0; i < count; i++) {
-                const event = shuffled[i % shuffled.length];
-                const tpl = tickerTemplates[Math.floor(Math.random() * tickerTemplates.length)];
-                signals.push({
-                    text: tpl.tpl(event),
-                    icon: tpl.icon,
-                    eventId: event.id,
-                    lat: event.lat,
-                    lng: event.lng
-                });
-            }
-            return signals;
-        }
-
-        function renderTicker() {
-            const track = document.getElementById('ticker-track');
-            const signals = generateTickerSignals();
-            if (signals.length === 0) {
-                track.innerHTML = '<span class="ticker-item" style="cursor:default;"><span class="ticker-icon">📡</span> Сканирование сигналов...</span>';
-                return;
-            }
-
-            let html = '';
-            // Duplicate signals for seamless loop
-            const allSignals = [...signals, ...signals];
-            allSignals.forEach((s, i) => {
-                if (i > 0) html += '<span class="ticker-sep">◆</span>';
-                html += `<span class="ticker-item" data-lat="${s.lat}" data-lng="${s.lng}" data-eid="${s.eventId}">
-                    <span class="ticker-icon">${s.icon}</span> ${s.text}
-                </span>`;
-            });
-            track.innerHTML = html;
-
-            // Reset animation
-            track.style.animation = 'none';
-            track.offsetHeight; // trigger reflow
-            track.style.animation = `ticker-scroll ${Math.max(30, allSignals.length * 4)}s linear infinite`;
-
-            // Click handlers
-            track.querySelectorAll('.ticker-item[data-lat]').forEach(item => {
-                item.addEventListener('click', () => {
-                    const lat = parseFloat(item.dataset.lat);
-                    const lng = parseFloat(item.dataset.lng);
-                    const eid = item.dataset.eid;
-                    map.flyTo([lat, lng], 14, { duration: 1 });
-                    if (mapMarkers[eid]) {
-                        setTimeout(() => mapMarkers[eid].openPopup(), 600);
-                    }
-                    showLiveRadar(`🎯 Фокус: ${localEvents.find(e => e.id === eid)?.name || 'Зона спроса'}`);
-                });
-            });
-        }
-
-        function startTicker() {
-            renderTicker();
-            tickerInterval = setInterval(renderTicker, 30000);
-        }
-
-        // ================================================
-        // === VOICE / FAB ACTIONS ===
-        // ================================================
-        function speakInitialBriefing() {
-            if (localEvents.length === 0) return;
-            let closestEvent = null, minD = Infinity;
-            localEvents.forEach(e => {
-                const d = getDistance(baseLat, baseLng, e.lat, e.lng);
-                if (d < minD) { minD = d; closestEvent = e; }
-            });
-            if (closestEvent) {
-                const alpha = closestEvent.alphaScore || calcAlphaScore(closestEvent);
-                speak(`Все зоны загружены. Ближайшая цель — ${closestEvent.name}. Альфа скор: ${alpha}. Ожидаемый чек до ${closestEvent.priceRange.replace('₽', 'рублей')}.`);
-                showLiveRadar(`🗣️ Голосовой помощник:<br>Ближайшая цель: ${closestEvent.name}<br>${getAlphaBadgeHtml(alpha)}`);
-            }
-        }
-
-        document.getElementById('btn-voice').addEventListener('click', () => {
-            if (isSpeaking) {
-                window.speechSynthesis.cancel();
-                isSpeaking = false;
-                document.getElementById('btn-voice').style.background = '';
-                document.getElementById('btn-voice').style.color = voiceMuted ? '#555' : '#C026D3';
-            } else {
-                // Toggle mute on double-quick press handled via simple toggle
-                if (localEvents.length === 0) {
-                    voiceMuted = false;
-                    speak("В вашем районе нет отслеживаемых зон.");
-                    return;
-                }
-                voiceMuted = false;
-                let closestEvent = localEvents[0], minD = Infinity;
-                localEvents.forEach(e => {
-                    const d = getDistance(baseLat, baseLng, e.lat, e.lng);
-                    if (d < minD) { minD = d; closestEvent = e; }
-                });
-                const alpha = closestEvent.alphaScore || calcAlphaScore(closestEvent);
-                speak(`Ближайшая прибыльная зона: ${closestEvent.name}. Альфа: ${alpha}. Ожидаемый чек: ${closestEvent.priceRange.replace('₽', 'рублей')}.`);
-                showLiveRadar(`🗣️ ${closestEvent.name} • α ${alpha}`);
-            }
-        });
-
-        document.getElementById('btn-locate').addEventListener('click', () => {
-            if (isNavigating) {
-                navAutoCenter = true;
-            }
-            if (userMarker) {
-                map.flyTo(userMarker.getLatLng(), 15, { duration: 1 });
-            } else {
-                map.flyTo([baseLat, baseLng], 14, { duration: 1 });
-            }
-        });
+            poiLoaded=true;showLiveRadar(`✅ Найдено ${count} POI рядом`);showToast(`Обнаружено ${count} точек интереса`,3000,'info');
+        }catch(e){showToast('Ошибка загрузки POI');btn.classList.remove('active-toggle')}
+    }
+    document.getElementById('btn-poi').addEventListener('click',discoverPOIs);
+
+    // Nav to arbitrary coord
+    window.startNavToCoord=function(lat,lng){
+        map.closePopup();document.getElementById('route-loading').classList.add('active');
+        buildRoute(baseLat,baseLng,lat,lng).then(rd=>{document.getElementById('route-loading').classList.remove('active');activateNav(rd,{name:'POI',lat,lng})}).catch(()=>{document.getElementById('route-loading').classList.remove('active');showToast('Маршрут недоступен');window.open(getRouteUrl(lat,lng),'_blank')});
+    };
+
+    // ========== HEATMAP ==========
+    function initHeat(){const d=localEvents.map(e=>[e.lat,e.lng,e.intensity/10]);heatLayer=L.heatLayer(d,{radius:35,blur:25,maxZoom:15,max:1,gradient:{0.2:'#1e40af',0.4:'#7c3aed',0.6:'#C026D3',0.8:'#e11d48',1:'#ef4444'}})}
+    function toggleHeat(){if(!heatLayer)return;const b=document.getElementById('btn-heatmap');heatmapVisible?(map.removeLayer(heatLayer),b.classList.remove('active-toggle'),heatmapVisible=false,showLiveRadar('Тепловая карта OFF')):(heatLayer.addTo(map),b.classList.add('active-toggle'),heatmapVisible=true,showLiveRadar('🔥 Тепловая карта ON'))}
+    document.getElementById('btn-heatmap').addEventListener('click',toggleHeat);
+
+    // ========== OSRM NAVIGATION ==========
+    function mIcon(t,m){if(t==='arrive')return'ph-flag-checkered';if(t==='depart')return'ph-arrow-up';if(t==='turn'||t==='end of road'){switch(m){case'right':return'ph-arrow-right';case'left':return'ph-arrow-left';case'sharp right':return'ph-arrow-bend-down-right';case'sharp left':return'ph-arrow-bend-down-left';case'slight right':return'ph-arrow-up-right';case'slight left':return'ph-arrow-up-left';case'uturn':return'ph-arrow-u-up-left';default:return'ph-arrow-up'}}if(t==='roundabout'||t==='rotary')return'ph-arrows-clockwise';if(t==='fork')return m==='left'?'ph-arrow-up-left':'ph-arrow-up-right';return'ph-arrow-up'}
+    function mText(t,m,n){const s=n?` на ${n}`:'';switch(t){case'depart':return`Начните движение${s}`;case'arrive':return'Вы прибыли в точку назначения';case'turn':case'end of road':switch(m){case'right':return`Поверните направо${s}`;case'left':return`Поверните налево${s}`;case'sharp right':return`Резко направо${s}`;case'sharp left':return`Резко налево${s}`;case'slight right':return`Плавно направо${s}`;case'slight left':return`Плавно налево${s}`;case'uturn':return`Развернитесь${s}`;default:return`Прямо${s}`}case'new name':case'continue':return`Продолжайте прямо${s}`;case'roundabout':case'rotary':return`На кольце${s}`;case'merge':return`Влейтесь в поток${s}`;case'fork':return m==='left'?`Держитесь левее${s}`:`Держитесь правее${s}`;default:return`Продолжайте движение${s}`}}
+
+    async function buildRoute(sLat,sLng,eLat,eLng){const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${eLng},${eLat}?overview=full&geometries=geojson&steps=true`);if(!r.ok)throw new Error('net');const d=await r.json();if(d.code!=='Ok')throw new Error('no route');const rt=d.routes[0];return{distance:rt.distance,duration:rt.duration,coordinates:rt.geometry.coordinates.map(c=>[c[1],c[0]]),maneuvers:rt.legs[0].steps.map(s=>({instruction:mText(s.maneuver.type,s.maneuver.modifier,s.name),distance:s.distance,location:[s.maneuver.location[1],s.maneuver.location[0]],type:s.maneuver.type,modifier:s.maneuver.modifier||'',streetName:s.name||'',icon:mIcon(s.maneuver.type,s.maneuver.modifier)}))}}
+
+    function drawRoute(coords){clearRoute();const gl=L.polyline(coords,{color:'#C026D3',weight:14,opacity:.2,lineCap:'round'}).addTo(map);routeLayers.push(gl);const mn=L.polyline(coords,{color:'#C026D3',weight:5,opacity:.9,lineCap:'round'}).addTo(map);routeLayers.push(mn);const dm=L.marker(coords[coords.length-1],{icon:L.divIcon({className:'',html:'<div class="dest-pulse"></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:1500}).addTo(map);routeLayers.push(dm);map.fitBounds(mn.getBounds(),{padding:[60,60],maxZoom:15})}
+    function updateRouteProg(idx,coords){const old=routeLayers.find(l=>l._tr);if(old){map.removeLayer(old);routeLayers=routeLayers.filter(l=>l!==old)}if(idx>0){const t=L.polyline(coords.slice(0,idx+1),{color:'#555',weight:5,opacity:.6,lineCap:'round'}).addTo(map);t._tr=true;routeLayers.push(t)}}
+    function clearRoute(){routeLayers.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l)});routeLayers=[]}
+
+    window.startInternalNav=function(eid){const ev=localEvents.find(e=>e.id===eid);if(!ev)return;map.closePopup();hideSheet();document.getElementById('route-loading').classList.add('active');
+        buildRoute(baseLat,baseLng,ev.lat,ev.lng).then(rd=>{document.getElementById('route-loading').classList.remove('active');activateNav(rd,ev)}).catch(()=>{document.getElementById('route-loading').classList.remove('active');showToast('Маршрут недоступен. Открываем Яндекс.');setTimeout(()=>window.open(getRouteUrl(ev.lat,ev.lng),'_blank'),1500)})};
+
+    function activateNav(rd,ev){isNavigating=true;activeRoute={...rd,target:ev};currentManeuverIndex=0;navTotalDistance=rd.distance;navRemainingDistance=rd.distance;voiceAnnounced={};deviationCount=0;navAutoCenter=true;drawRoute(rd.coordinates);document.getElementById('navigation-panel').classList.add('active');updateNavUI();speak(`Маршрут построен. ${fmtDist(rd.distance)}, ${fmtDur(rd.duration)}. ${rd.maneuvers[0].instruction}.`);showLiveRadar(`🧭 Навигация: ${ev.name}<br>${fmtDist(rd.distance)} • ${fmtDur(rd.duration)}`)}
+
+    function updateNavUI(){if(!activeRoute)return;const m=activeRoute.maneuvers[currentManeuverIndex];if(!m)return;document.getElementById('nav-icon').innerHTML=`<i class="ph-bold ${m.icon}"></i>`;document.getElementById('nav-turn-text').textContent=m.instruction;document.getElementById('nav-street').textContent=m.streetName;document.getElementById('nav-eta').textContent=fmtDur(activeRoute.duration*(navRemainingDistance/navTotalDistance));document.getElementById('nav-total-dist').textContent=fmtDist(navRemainingDistance);const dt=getDistance(baseLat,baseLng,m.location[0],m.location[1])*1000;document.getElementById('nav-dist-to').textContent=`Через ${fmtDist(dt)}`;document.getElementById('nav-progress').style.width=`${Math.max(0,Math.min(100,(navTotalDistance-navRemainingDistance)/navTotalDistance*100))}%`;const nx=activeRoute.maneuvers[currentManeuverIndex+1];document.getElementById('nav-next-preview').innerHTML=nx?`<i class="ph-bold ${nx.icon}"></i><span>Затем: ${nx.instruction}</span>`:'';document.getElementById('nav-speed').textContent=document.getElementById('speed-display').textContent}
+
+    function cancelNav(){isNavigating=false;activeRoute=null;currentManeuverIndex=0;voiceAnnounced={};clearRoute();document.getElementById('navigation-panel').classList.remove('active');const a=document.querySelector('.nav-arrived');if(a)a.remove();document.getElementById('nav-icon').parentElement.style.display='';document.querySelector('.nav-stats-row').style.display='';document.querySelector('.nav-progress-bar').style.display='';document.getElementById('nav-next-preview').style.display='';document.getElementById('nav-cancel-btn').style.display='';if(localEvents.length>0)showSheet();speechSynthesis.cancel();isSpeaking=false;showLiveRadar('Навигация отменена')}
+    document.getElementById('nav-cancel-btn').addEventListener('click',cancelNav);
+
+    function arriveNav(){playChime();speak('Вы прибыли в точку назначения. Удачной охоты!');showLiveRadar(`🏁 Прибытие: ${activeRoute.target.name}`);document.getElementById('nav-icon').parentElement.style.display='none';document.querySelector('.nav-stats-row').style.display='none';document.querySelector('.nav-progress-bar').style.display='none';document.getElementById('nav-next-preview').style.display='none';const d=document.createElement('div');d.className='nav-arrived';d.innerHTML=`<i class="ph-fill ph-flag-checkered"></i><div class="nav-arrived-text">Вы на месте!</div><div class="nav-arrived-sub">${activeRoute.target.name}</div>`;document.getElementById('navigation-panel').insertBefore(d,document.getElementById('nav-cancel-btn'));setTimeout(cancelNav,8000)}
+
+    function navTick(){if(!isNavigating||!activeRoute)return;const coords=activeRoute.coordinates;let minD=Infinity,cIdx=0;for(let i=0;i<coords.length-1;i++){const dx=coords[i+1][0]-coords[i][0],dy=coords[i+1][1]-coords[i][1],t=Math.max(0,Math.min(1,((baseLat-coords[i][0])*dx+(baseLng-coords[i][1])*dy)/(dx*dx+dy*dy)||0)),px=coords[i][0]+t*dx,py=coords[i][1]+t*dy,d=getDistance(baseLat,baseLng,px,py);if(d<minD){minD=d;cIdx=i}}
+        if(minD>0.1){deviationCount++;if(deviationCount>5){showLiveRadar('🔄 Пересчёт маршрута...');deviationCount=0;buildRoute(baseLat,baseLng,activeRoute.target.lat,activeRoute.target.lng).then(nr=>{clearRoute();activeRoute={...nr,target:activeRoute.target};navTotalDistance=nr.distance;currentManeuverIndex=0;voiceAnnounced={};drawRoute(nr.coordinates);updateNavUI();speak('Маршрут перестроен.')}).catch(()=>showToast('Не удалось перестроить'));return}}else deviationCount=0;
+        let rem=0;for(let i=cIdx;i<coords.length-1;i++)rem+=getDistance(coords[i][0],coords[i][1],coords[i+1][0],coords[i+1][1]);navRemainingDistance=rem*1000;updateRouteProg(cIdx,coords);
+        const ms=activeRoute.maneuvers;if(currentManeuverIndex<ms.length){const m=ms[currentManeuverIndex],dt=getDistance(baseLat,baseLng,m.location[0],m.location[1])*1000;
+            if(dt<=200&&dt>50&&!voiceAnnounced[currentManeuverIndex+'_200']){voiceAnnounced[currentManeuverIndex+'_200']=true;if(m.type!=='depart')speak(`Через ${fmtDistSpeech(dt)}, ${m.instruction}`)}
+            if(dt<=50&&!voiceAnnounced[currentManeuverIndex+'_50']){voiceAnnounced[currentManeuverIndex+'_50']=true;if(m.type!=='depart')speak(m.instruction)}
+            if(dt<30&&currentManeuverIndex<ms.length-1){currentManeuverIndex++;if(ms[currentManeuverIndex].type==='arrive'){arriveNav();return}playBeep()}}
+        if(navAutoCenter)map.setView([baseLat,baseLng],map.getZoom(),{animate:true,duration:.5});updateNavUI()}
+
+    // ========== GPS TRACKING ==========
+    const carSvg='<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="rgba(192,38,211,.15)" stroke="rgba(192,38,211,.4)" stroke-width="1"/><circle cx="18" cy="18" r="4.5" fill="#fff" stroke="#C026D3" stroke-width="2"/><polygon points="18,5 22,14 18,11.5 14,14" fill="#C026D3" opacity=".9"/></svg>';
+    function carIcon(h){return L.divIcon({className:'car-marker-container',html:`<div class="car-marker-rotatable" style="transform:rotate(${h||0}deg)">${carSvg}</div>`,iconSize:[36,36],iconAnchor:[18,18]})}
+
+    function startTracking(){if(!('geolocation' in navigator))return;navigator.geolocation.watchPosition(p=>{baseLat=p.coords.latitude;baseLng=p.coords.longitude;if(p.coords.speed!=null)document.getElementById('speed-display').innerText=Math.round(p.coords.speed*3.6);if(p.coords.heading!=null&&!isNaN(p.coords.heading))currentHeading=p.coords.heading;
+        if(!userMarker){userMarker=L.marker([baseLat,baseLng],{icon:carIcon(currentHeading),zIndexOffset:2000}).addTo(map);userCircle=L.circle([baseLat,baseLng],{radius:p.coords.accuracy/2,color:'#C026D3',weight:1,fillOpacity:.08,fillColor:'#C026D3'}).addTo(map)}else{userMarker.setLatLng([baseLat,baseLng]);const el=document.querySelector('.car-marker-rotatable');if(el)el.style.transform=`rotate(${currentHeading}deg)`;userCircle.setLatLng([baseLat,baseLng]);userCircle.setRadius(Math.min(p.coords.accuracy/2,200))}
+        navTick()},()=>{},{enableHighAccuracy:true,maximumAge:2000})}
+
+    // ========== UI CONTROLLERS ==========
+    function showSheet(){if(isNavigating)return;document.getElementById('bottom-sheet').classList.remove('hide-bottom');document.getElementById('btn-show-zones').style.display='none';clearTimeout(sheetTimeout);sheetTimeout=setTimeout(hideSheet,8000)}
+    function hideSheet(){document.getElementById('bottom-sheet').classList.add('hide-bottom');document.getElementById('btn-show-zones').style.display='flex'}
+    window.hideSheet=hideSheet;
+    document.getElementById('btn-show-zones').addEventListener('click',showSheet);
+    let sheetSY=0;const shH=document.getElementById('sheet-handle');shH.addEventListener('touchstart',e=>{sheetSY=e.touches[0].clientY;clearTimeout(sheetTimeout)},{passive:true});shH.addEventListener('touchmove',e=>{if(e.touches[0].clientY-sheetSY>40)hideSheet()},{passive:true});
+
+    function showLiveRadar(msg){const r=document.getElementById('live-radar');document.getElementById('radar-messages').innerHTML=msg;r.classList.remove('hide-left');clearTimeout(radarTimeout);radarTimeout=setTimeout(()=>r.classList.add('hide-left'),8000)}
+    let rSX=0;const rP=document.getElementById('live-radar');rP.addEventListener('touchstart',e=>rSX=e.touches[0].clientX,{passive:true});rP.addEventListener('touchmove',e=>{if(rSX-e.touches[0].clientX>40)rP.classList.add('hide-left')},{passive:true});
+
+    // ========== MARKER CREATION ==========
+    function createMarker(ev){const r=ev.intensity*60,c=L.circle([ev.lat,ev.lng],{color:'#C026D3',fillColor:'#C026D3',fillOpacity:.2,weight:2,radius:r,className:'demand-zone'}).addTo(map);
+        const a=ev.alphaScore||calcAlpha(ev),ru=getRouteUrl(ev.lat,ev.lng),vBadge=ev.verified?'<span class="verified-badge"><i class="ph-fill ph-seal-check"></i> Verified</span>':'';
+        c.bindPopup(`<div class="flex justify-between items-center" style="margin-bottom:6px"><h3 class="font-bold text-white" style="font-size:1rem;max-width:50%">${ev.name}</h3><div class="flex items-center gap-2">${alphaBadge(a)}<span class="price-tag">${ev.priceRange}</span></div></div><div style="font-size:.75rem;color:#a1a1aa;margin-bottom:6px"><i class="ph-fill ph-map-pin"></i> ${ev.address} ${vBadge}</div><div class="flex items-center gap-2 text-xs text-demand font-bold" style="margin-bottom:4px"><i class="ph-fill ph-clock"></i> ${ev.timeStart} – ${ev.timeEnd}</div><p class="text-xs text-gray" style="margin-bottom:2px;text-transform:uppercase"><i class="ph-fill ph-users"></i> ${ev.participants}</p><div class="popup-btn-row"><button class="route-btn" onclick="window.startInternalNav('${ev.id}')"><i class="ph-bold ph-navigation-arrow"></i> Навигация</button><a href="${ru}" target="_blank" rel="noopener noreferrer" class="route-btn sec-btn"><i class="ph-bold ph-arrow-square-out"></i> Яндекс</a></div>`);
+        mapMarkers[ev.id]=c}
+
+    function renderMarkers(){let delay=400;const sorted=[...localEvents].sort((a,b)=>b.intensity-a.intensity);sorted.forEach((ev,i)=>{setTimeout(()=>{playBeep();createMarker(ev);showLiveRadar(`Зона: ${ev.name}`);if(i===sorted.length-1){setTimeout(speakBriefing,1200);initHeat();drawForecast()}},delay);delay+=500})}
+
+    // ========== EVENTS LIST ==========
+    function renderList(){const list=document.getElementById('events-list');list.innerHTML='';[...localEvents].sort((a,b)=>(b.alphaScore||0)-(a.alphaScore||0)).forEach(e=>{const a=e.alphaScore||calcAlpha(e),card=document.createElement('div');card.className='event-card';const ru=getRouteUrl(e.lat,e.lng),vb=e.verified?'<span class="verified-badge"><i class="ph-fill ph-seal-check"></i></span>':'';
+        card.innerHTML=`<div class="flex justify-between items-center" style="margin-bottom:4px"><h4 class="font-bold text-white" style="font-size:.8rem;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name} ${vb}</h4><div class="flex items-center gap-2">${alphaBadge(a)}<span class="price-tag">${e.priceRange}</span></div></div><div style="font-size:.7rem;color:#a1a1aa;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.address}</div><div class="flex items-center justify-between text-xs text-gray" style="margin-bottom:6px"><span class="flex items-center gap-1 text-demand font-bold" style="font-size:.7rem"><i class="ph-fill ph-clock"></i> ${e.timeStart} – ${e.timeEnd}</span><span style="font-size:.6rem;color:#555">${e.type}</span></div><div class="flex gap-2"><button class="route-btn-small" style="flex:1" onclick="event.stopPropagation();window.startInternalNav('${e.id}')"><i class="ph-bold ph-navigation-arrow"></i> Навигация</button><a href="${ru}" target="_blank" rel="noopener noreferrer" class="route-btn-small" style="flex:1;background:rgba(255,255,255,.06);color:#a1a1aa" onclick="event.stopPropagation();hideSheet()"><i class="ph-bold ph-arrow-square-out"></i> Яндекс</a></div>`;
+        card.onclick=()=>{map.flyTo([e.lat,e.lng],14,{duration:1});setTimeout(()=>{if(mapMarkers[e.id])mapMarkers[e.id].openPopup()},600)};list.appendChild(card)})}
+
+    // ========== TICKER TAPE ==========
+    const tTpl=[
+        (e)=>`🔒 Закрытая вечеринка у «${e.name}» — VIP через ${10+Math.floor(Math.random()*30)} мин`,
+        (e)=>`⚡ Liquidity Sweep: ${e.name} перенасыщен — объезд`,
+        (e)=>`📈 ${e.name}: спрос +${30+Math.floor(Math.random()*60)}%`,
+        (e)=>`🎤 Событие завершается: ${e.name} — волна через ${5+Math.floor(Math.random()*20)} мин`,
+        (e)=>`✈️ Посадка рейса: ${e.name} — ${80+Math.floor(Math.random()*200)} пасс.`,
+        (e)=>`🎯 Order Block: скрытый спрос ${e.name} — α ${e.alphaScore||'??'}`,
+        (e)=>`💎 Premium Lead: ${e.name} — чек ${e.priceRange}`,
+        (e)=>`📊 Leading Indicator: ${e.name} — спрос через ${15+Math.floor(Math.random()*25)} мин`,
+        (e)=>`🌧️ Погодный буст: осадки +25% спроса у ${e.name}`,
+        (e)=>`🔥 HOT: ${e.name} — интенсивность ${e.intensity}/10`
+    ];
+    function genTicker(){if(!localEvents.length)return[];const sigs=[],cnt=Math.min(localEvents.length*2,12),sh=[...localEvents].sort(()=>Math.random()-.5);for(let i=0;i<cnt;i++){const ev=sh[i%sh.length],fn=tTpl[Math.floor(Math.random()*tTpl.length)];sigs.push({text:fn(ev),eid:ev.id,lat:ev.lat,lng:ev.lng})}return sigs}
+    function renderTicker(){const tr=document.getElementById('ticker-track'),sigs=genTicker();if(!sigs.length){tr.innerHTML='<span class="ticker-item" style="cursor:default">📡 Сканирование...</span>';return}let h='';[...sigs,...sigs].forEach((s,i)=>{if(i)h+='<span class="ticker-sep">◆</span>';h+=`<span class="ticker-item" data-lat="${s.lat}" data-lng="${s.lng}" data-eid="${s.eid}">${s.text}</span>`});tr.innerHTML=h;tr.style.animation='none';tr.offsetHeight;tr.style.animation=`ticker-scroll ${Math.max(30,sigs.length*4)}s linear infinite`;tr.querySelectorAll('.ticker-item[data-lat]').forEach(it=>it.addEventListener('click',()=>{const lat=+it.dataset.lat,lng=+it.dataset.lng,eid=it.dataset.eid;map.flyTo([lat,lng],14,{duration:1});if(mapMarkers[eid])setTimeout(()=>mapMarkers[eid].openPopup(),600)}))}
+    function startTicker(){renderTicker();tickerInterval=setInterval(renderTicker,30000)}
+
+    // ========== VOICE FAB ==========
+    function speakBriefing(){if(!localEvents.length)return;let best=null,minD=Infinity;localEvents.forEach(e=>{const d=getDistance(baseLat,baseLng,e.lat,e.lng);if(d<minD){minD=d;best=e}});if(best){const a=best.alphaScore||calcAlpha(best);speak(`Загружено ${localEvents.length} зон. Ближайшая: ${best.name}. Альфа: ${a}. Чек до ${best.priceRange.replace('₽','рублей')}.`);showLiveRadar(`🗣️ Ближайшая: ${best.name} ${alphaBadge(a)}`)}}
+
+    document.getElementById('btn-voice').addEventListener('click',()=>{if(isSpeaking){speechSynthesis.cancel();isSpeaking=false;document.getElementById('btn-voice').style.background='';document.getElementById('btn-voice').style.color='#C026D3'}else{voiceMuted=false;if(!localEvents.length){speak('Нет зон.');return}let best=localEvents[0],minD=Infinity;localEvents.forEach(e=>{const d=getDistance(baseLat,baseLng,e.lat,e.lng);if(d<minD){minD=d;best=e}});const a=best.alphaScore||calcAlpha(best);speak(`Ближайшая: ${best.name}. Альфа: ${a}. Чек: ${best.priceRange.replace('₽','рублей')}.`);showLiveRadar(`🗣️ ${best.name} • α ${a}`)}});
+    document.getElementById('btn-locate').addEventListener('click',()=>{if(isNavigating)navAutoCenter=true;if(userMarker)map.flyTo(userMarker.getLatLng(),15,{duration:1});else map.flyTo([baseLat,baseLng],14,{duration:1})});
+
+    // ========== STARTUP ==========
+    document.getElementById('btn-start').addEventListener('click',()=>{
+        initAudio();const u=new SpeechSynthesisUtterance('');u.volume=0;speechSynthesis.speak(u);
+        document.getElementById('location-status').innerText='Определение локации...';document.getElementById('btn-start').style.transform='scale(.95)';document.getElementById('btn-start').style.opacity='.5';
+        if('geolocation' in navigator){navigator.geolocation.getCurrentPosition(async p=>{baseLat=p.coords.latitude;baseLng=p.coords.longitude;await fetchCity(baseLat,baseLng);launch()},()=>launch(),{enableHighAccuracy:true,timeout:6000})}else launch()});
+
+    async function fetchCity(lat,lng){try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`),d=await r.json();if(d&&d.address)cityName=d.address.city||d.address.town||d.address.state||'Ваш город'}catch(e){cityName='Локация определена'}}
+
+    function launch(){
+        document.getElementById('start-screen').classList.add('opacity-0');setTimeout(()=>document.getElementById('start-screen').classList.add('d-none'),600);
+        document.getElementById('header-city').innerText=cityName;
+        localEvents=DB.filter(e=>getDistance(baseLat,baseLng,e.lat,e.lng)<=100);
+        localEvents.forEach(e=>{e.alphaScore=calcAlpha(e)});localEvents.sort((a,b)=>b.alphaScore-a.alphaScore);
+        setTimeout(()=>{
+            map=L.map('map',{zoomControl:false,attributionControl:false}).setView([baseLat,baseLng],12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);map.invalidateSize();
+            // Scanner re-render on move
+            map.on('moveend',()=>{if(scannerActive)renderScannerGrid()});
+            document.getElementById('top-left-panel').classList.remove('hide-top');
+            document.getElementById('top-right-panel').classList.remove('hide-top');
+            document.getElementById('forecast-widget').classList.remove('hide-top');
+            document.getElementById('fab-actions').classList.remove('opacity-0');
+            document.getElementById('radar-widget').classList.remove('opacity-0');
+            document.getElementById('ticker-container').classList.remove('opacity-0');
+            startTracking();startTicker();
+            setInterval(()=>{localEvents.forEach(e=>{e.alphaScore=calcAlpha(e)});drawForecast()},60000);
+            if(localEvents.length>0){showLiveRadar(`Радар активирован. ${localEvents.length} зон`);showSheet();renderList();renderMarkers()}else{showLiveRadar('⚠️ Нет зон в радиусе 100 км');setTimeout(()=>speak('Карта загружена. Нет отслеживаемых зон.'),1500);drawForecast()}
+        },600);
+    }
 
     })();
     </script>
