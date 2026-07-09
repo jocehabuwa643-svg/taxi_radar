@@ -23,6 +23,37 @@
     <title>Taxi Radar Pro — PWA</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin=""/>
+    <style>
+        /* Неоновые кластеры Taxi Radar Pro */
+        .trp-cluster-wrapper { background: transparent !important; }
+        .trp-cluster {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #E85BF5, #C026D3 60%, #7C1E8C);
+            border: 2px solid rgba(192, 38, 211, 0.9);
+            box-shadow: 0 0 18px rgba(192, 38, 211, 0.85), inset 0 0 10px rgba(255, 255, 255, 0.25);
+            color: #fff; font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: 0.95rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            animation: trpClusterPulse 2.4s ease-in-out infinite;
+        }
+        .trp-cluster.glass { background: radial-gradient(circle at 30% 30%, rgba(232, 91, 245, 0.92), rgba(192, 38, 211, 0.85) 60%, rgba(124, 30, 140, 0.9)); }
+        @keyframes trpClusterPulse {
+            0%, 100% { box-shadow: 0 0 18px rgba(192, 38, 211, 0.85), inset 0 0 10px rgba(255, 255, 255, 0.25); }
+            50% { box-shadow: 0 0 30px rgba(192, 38, 211, 1), inset 0 0 14px rgba(255, 255, 255, 0.35); }
+        }
+        /* Одиночный маркер зоны спроса */
+        .demand-zone-marker { background: transparent !important; border: none !important; }
+        .demand-zone-dot {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: radial-gradient(circle, rgba(192, 38, 211, 0.9), rgba(192, 38, 211, 0.15));
+            border: 2px solid #C026D3;
+            box-shadow: 0 0 12px rgba(192, 38, 211, 0.8);
+        }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -1183,6 +1214,19 @@
 
         .ai-predictions { display: flex; flex-direction: column; gap: 10px; }
 
+        /* Скелетон-лоадер AI-анализа (Этап 5) */
+        @keyframes trpShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .ai-skeleton-wrap { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .ai-skel-line, .ai-skel-card {
+            border-radius: 8px;
+            background: linear-gradient(90deg, rgba(192,38,211,0.08) 25%, rgba(192,38,211,0.24) 37%, rgba(192,38,211,0.08) 63%);
+            background-size: 200% 100%;
+            animation: trpShimmer 1.4s ease-in-out infinite;
+        }
+        .ai-skel-line { height: 12px; }
+        .ai-skel-card { height: 54px; }
+        .ai-skel-label { font-size: 0.72rem; color: var(--text-dim); padding: 0 2px 2px; display: flex; align-items: center; gap: 6px; }
+
         .ai-prediction-card {
             background: rgba(192, 38, 211, 0.08);
             border: 1px solid rgba(192, 38, 211, 0.25);
@@ -1356,7 +1400,7 @@
 
         /* === OFFLINE INDICATOR === */
         body.offline::before {
-            content: '📴 Офлайн режим — данные из кэша';
+            content: attr(data-offline-info);
             position: fixed;
             top: 0;
             left: 0;
@@ -1680,47 +1724,187 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+    <!-- База событий вынесена в отдельный файл (Этап 3). Должна грузиться ДО основного скрипта. -->
+    <script src="data.js"></script>
     <script>
         'use strict';
+
+        // ============================================
+        // ХРАНИЛИЩЕ: лёгкая async-обёртка над IndexedDB (idb-keyval style) — Этап 4
+        // Один object store 'kv' (key -> value). Значения хранятся как есть
+        // (structured clone), без JSON. При отсутствии IndexedDB — фолбэк на localStorage.
+        // ============================================
+        const IDB = (() => {
+            const DB_NAME = 'taxi-radar-pro';
+            const STORE = 'kv';
+            let dbPromise = null;
+
+            function getDB() {
+                if (dbPromise) return dbPromise;
+                dbPromise = new Promise((resolve, reject) => {
+                    if (!('indexedDB' in window)) { reject(new Error('IndexedDB не поддерживается')); return; }
+                    const req = indexedDB.open(DB_NAME, 1);
+                    req.onupgradeneeded = () => { req.result.createObjectStore(STORE); };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+                return dbPromise;
+            }
+
+            function run(mode, fn) {
+                return getDB().then(db => new Promise((resolve, reject) => {
+                    const t = db.transaction(STORE, mode);
+                    const request = fn(t.objectStore(STORE));
+                    t.oncomplete = () => resolve(request ? request.result : undefined);
+                    t.onerror = () => reject(t.error);
+                    t.onabort = () => reject(t.error);
+                }));
+            }
+
+            return {
+                set:  (key, val) => run('readwrite', s => s.put(val, key)),
+                get:  (key)      => run('readonly',  s => s.get(key)),
+                del:  (key)      => run('readwrite', s => s.delete(key)),
+                keys: ()         => run('readonly',  s => s.getAllKeys())
+            };
+        })();
+
+        // Публичные async-хелперы с graceful-фолбэком на localStorage (+ авто-миграция старых данных)
+        async function idbSet(key, val) {
+            try { return await IDB.set(key, val); }
+            catch (e) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (_) {} }
+        }
+        async function idbGet(key) {
+            try { const v = await IDB.get(key); if (v !== undefined) return v; } catch (e) {}
+            // фолбэк/миграция: читаем из localStorage, если в IndexedDB пусто
+            try { const raw = localStorage.getItem(key); return raw != null ? JSON.parse(raw) : undefined; }
+            catch (_) { return undefined; }
+        }
+        async function idbDel(key) {
+            try { await IDB.del(key); } catch (e) {}
+            try { localStorage.removeItem(key); } catch (_) {}
+        }
+        async function idbKeys() {
+            try { return await IDB.keys(); } catch (e) { return []; }
+        }
 
         // ============================================
         // PWA: SERVICE WORKER REGISTRATION
         // ============================================
         const serviceWorkerCode = `
-            const CACHE_NAME = 'taxi-radar-pro-v1';
-            
-            self.addEventListener('install', (event) => {
-                console.log('[SW] Installing...');
-                self.skipWaiting();
-            });
-            
+            const STATIC_CACHE = 'trp-static-v2';
+            const API_CACHE = 'trp-api-v2';
+            const WEATHER_TTL = 60 * 60 * 1000;          // 1 час
+            const GEO_TTL = 7 * 24 * 60 * 60 * 1000;     // 7 дней
+
+            self.addEventListener('install', () => self.skipWaiting());
+
             self.addEventListener('activate', (event) => {
-                console.log('[SW] Activated');
-                event.waitUntil(self.clients.claim());
+                event.waitUntil((async () => {
+                    const keep = [STATIC_CACHE, API_CACHE];
+                    const names = await caches.keys();
+                    await Promise.all(names.filter(n => keep.indexOf(n) === -1).map(n => caches.delete(n)));
+                    await self.clients.claim();
+                })());
             });
-            
+
+            // Клонирует ответ, добавляя метку времени кэширования (для TTL)
+            function stamp(response) {
+                return response.clone().blob().then((body) => {
+                    const headers = new Headers(response.headers);
+                    headers.set('sw-cached-at', Date.now().toString());
+                    return new Response(body, { status: response.status, statusText: response.statusText, headers: headers });
+                });
+            }
+            function isExpired(response, ttl) {
+                const ts = response.headers.get('sw-cached-at');
+                if (!ts) return false;
+                return (Date.now() - parseInt(ts, 10)) > ttl;
+            }
+
+            // StaleWhileRevalidate: мгновенно отдаём кэш, в фоне обновляем
+            async function staleWhileRevalidate(request, cacheName, ttl) {
+                const cache = await caches.open(cacheName);
+                const cached = await cache.match(request);
+                const network = fetch(request).then(async (response) => {
+                    if (response && response.ok) await cache.put(request, await stamp(response));
+                    return response;
+                }).catch(() => null);
+                if (cached && !isExpired(cached, ttl)) return cached;   // фоновая ревалидация уже запущена
+                return (await network) || cached || Response.error();
+            }
+
+            // CacheFirst с TTL: свежий кэш -> сеть -> устаревший кэш как офлайн-фолбэк
+            async function cacheFirstTTL(request, cacheName, ttl) {
+                const cache = await caches.open(cacheName);
+                const cached = await cache.match(request);
+                if (cached && !isExpired(cached, ttl)) return cached;
+                try {
+                    const response = await fetch(request);
+                    if (response && response.ok) await cache.put(request, await stamp(response));
+                    return response;
+                } catch (e) {
+                    if (cached) return cached;
+                    throw e;
+                }
+            }
+
+            // CacheFirst для статики (без TTL): кэш -> сеть -> кэш
+            async function cacheFirstStatic(request) {
+                const cache = await caches.open(STATIC_CACHE);
+                const cached = await cache.match(request);
+                if (cached) return cached;
+                const response = await fetch(request);
+                if (response && (response.ok || response.type === 'opaque')) await cache.put(request, response.clone());
+                return response;
+            }
+
+            const OFFLINE_HTML = '<!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Офлайн — Taxi Radar Pro</title><style>body{margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a0f;color:#fff;font-family:system-ui,sans-serif;text-align:center;padding:24px}h1{color:#C026D3}p{color:#9aa;max-width:320px;line-height:1.5}</style></head><body><h1>📴 Нет соединения</h1><p>Taxi Radar Pro пока не сохранил эту страницу в кэш. Откройте приложение хотя бы раз при наличии сети — дальше оно будет работать офлайн.</p></body></html>';
+
             self.addEventListener('fetch', (event) => {
-                event.respondWith(
-                    caches.match(event.request).then((cached) => {
-                        return cached || fetch(event.request).then((response) => {
-                            if (response.ok && event.request.method === 'GET') {
-                                const clone = response.clone();
-                                caches.open(CACHE_NAME).then((cache) => {
-                                    cache.put(event.request, clone);
-                                });
-                            }
-                            return response;
-                        }).catch(() => {
-                            if (event.request.destination === 'document') {
-                                return new Response('<html><body><h1>Offline</h1></body></html>', {
-                                    headers: {'Content-Type': 'text/html'}
-                                });
-                            }
-                        });
-                    })
-                );
+                const request = event.request;
+                if (request.method !== 'GET') return;
+                const url = new URL(request.url);
+
+                // Погода Open-Meteo: StaleWhileRevalidate, TTL 1 час
+                if (url.hostname === 'api.open-meteo.com') {
+                    event.respondWith(staleWhileRevalidate(request, API_CACHE, WEATHER_TTL));
+                    return;
+                }
+                // Геокодинг Nominatim: CacheFirst, TTL 7 дней
+                if (url.hostname === 'nominatim.openstreetmap.org') {
+                    event.respondWith(cacheFirstTTL(request, API_CACHE, GEO_TTL));
+                    return;
+                }
+                // Тайлы карты, CDN-библиотеки, шрифты: CacheFirst (статика)
+                if (url.hostname.indexOf('basemaps.cartocdn.com') !== -1 ||
+                    url.hostname.indexOf('unpkg.com') !== -1 ||
+                    url.hostname.indexOf('fonts.googleapis.com') !== -1 ||
+                    url.hostname.indexOf('fonts.gstatic.com') !== -1) {
+                    event.respondWith(cacheFirstStatic(request));
+                    return;
+                }
+                // Свой origin (документ, data.js, иконки): CacheFirst + офлайн-фолбэк для навигации
+                event.respondWith((async () => {
+                    try {
+                        const cached = await caches.match(request);
+                        if (cached) {
+                            fetch(request).then((r) => { if (r && r.ok) caches.open(STATIC_CACHE).then((c) => c.put(request, r.clone())); }).catch(() => {});
+                            return cached;
+                        }
+                        const response = await fetch(request);
+                        if (response && response.ok) (await caches.open(STATIC_CACHE)).put(request, response.clone());
+                        return response;
+                    } catch (e) {
+                        if (request.mode === 'navigate' || request.destination === 'document') {
+                            return new Response(OFFLINE_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+                        }
+                        return Response.error();
+                    }
+                })());
             });
-            
+
             self.addEventListener('push', (event) => {
                 const options = {
                     body: event.data ? event.data.text() : 'Новая горячая зона!',
@@ -1731,7 +1915,7 @@
                 };
                 event.waitUntil(self.registration.showNotification('Taxi Radar Pro', options));
             });
-            
+
             self.addEventListener('notificationclick', (event) => {
                 event.notification.close();
                 event.waitUntil(clients.openWindow('/'));
@@ -1823,18 +2007,38 @@
         // ============================================
         // PWA: ONLINE/OFFLINE STATUS
         // ============================================
+        // Индикатор офлайн-режима показывает, какие данные доступны из локального кэша (Этап 4)
+        async function refreshOfflineInfo() {
+            let info = '📴 Офлайн режим — данные из кэша';
+            try {
+                const keys = await idbKeys();
+                const geo = keys.filter(k => typeof k === 'string' && k.indexOf('trp_geo_') === 0).length;
+                const hasWeather = keys.indexOf('trp_weather') !== -1;
+                const hasStats = keys.indexOf('trp_stats') !== -1;
+                const zones = app.state.localEvents.length;
+                info = `📴 Офлайн • ${zones} зон в кэше`
+                    + (geo ? `, ${geo} коорд.` : '')
+                    + (hasWeather ? ', погода ✓' : '')
+                    + (hasStats ? ', статистика ✓' : '');
+            } catch (e) {}
+            document.body.setAttribute('data-offline-info', info);
+        }
+
         window.addEventListener('online', () => {
             showNotification('🌐 Соединение восстановлено', 'ph-wifi-high');
             document.body.classList.remove('offline');
         });
 
         window.addEventListener('offline', () => {
-            showNotification('📴 Офлайн режим', 'ph-wifi-slash');
+            if (!document.body.getAttribute('data-offline-info')) document.body.setAttribute('data-offline-info', '📴 Офлайн режим — данные из кэша');
             document.body.classList.add('offline');
+            refreshOfflineInfo().then(() => showNotification(document.body.getAttribute('data-offline-info'), 'ph-wifi-slash'));
         });
 
         if (!navigator.onLine) {
+            document.body.setAttribute('data-offline-info', '📴 Офлайн режим — данные из кэша');
             document.body.classList.add('offline');
+            refreshOfflineInfo();
         }
 
         // ============================================
@@ -1869,162 +2073,81 @@
         // ============================================
         // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
         // ============================================
-        let baseLat = 55.7558, baseLng = 37.6173;
-        let cityName = "Москва";
-        let currentCountry = 'Россия';
+        // ============================================
+        // АРХИТЕКТУРА СОСТОЯНИЯ (Этап 3): класс TaxiRadarApp
+        // Централизованное наблюдаемое состояние (this.state) + PubSub (EventTarget).
+        // Транзиентные runtime-хендлы (map, маркеры, таймеры) остаются вне state.
+        // ============================================
+        class TaxiRadarApp {
+            constructor() {
+                this.state = {
+                    cityName: 'Москва',
+                    currentCountry: 'Россия',
+                    baseLat: 55.7558,
+                    baseLng: 37.6173,
+                    localEvents: [],
+                    weatherData: { temp: 18, condition: 'Пасмурно', isRain: false, impact: 25 },
+                    userStats: { totalTrips: 0, totalEarnings: 0, averageFare: 0, hotZonesVisited: 0, achievements: [] },
+                    heatmapEnabled: false,
+                    crowdFlowEnabled: false,
+                    voiceEnabled: true,
+                    autoRefreshEnabled: true,
+                    currentLanguage: localStorage.getItem('trp_language') || 'ru',
+                    recommendedPoint: null
+                };
+                // Простой PubSub поверх EventTarget
+                this.events = new EventTarget();
+            }
+            on(type, handler) { this.events.addEventListener(type, handler); }
+            off(type, handler) { this.events.removeEventListener(type, handler); }
+            emit(type, detail) { this.events.dispatchEvent(new CustomEvent(type, { detail })); }
+
+            // Централизованное обновление списка зон -> уведомляет подписчиков (UI реагирует сам)
+            setLocalEvents(list) {
+                this.state.localEvents = list;
+                this.emit('data:updated', list);
+            }
+            // Смена города -> событие city:changed (+ обновит координаты базы)
+            setCity(name, lat, lng, country) {
+                this.state.cityName = name;
+                this.state.baseLat = lat;
+                this.state.baseLng = lng;
+                if (country) this.state.currentCountry = country;
+                this.emit('city:changed', { name, lat, lng, country: this.state.currentCountry });
+            }
+        }
+
+        const app = new TaxiRadarApp();
+        window.app = app; // мост для inline-обработчиков в HTML и для отладки
+
+        // --- Транзиентные runtime-хендлы (НЕ наблюдаемое состояние, вне app.state) ---
         let map = null;
+        let clusterGroup = null;
         let userMarker = null;
         let userCircle = null;
         let mapMarkers = {};
-        let localEvents = [];
         let isSpeaking = false;
         let audioCtx = null;
-        let weatherData = { temp: 18, condition: 'Пасмурно', isRain: false, impact: 25 };
         let autoRefreshInterval = null;
         let aiScanInterval = null;
         let crowdFlowInterval = null;
         let heatLayer = null;
-        let heatmapEnabled = false;
-        let crowdFlowEnabled = false;
         let flowLines = [];
         let flowArrows = [];
-        let currentLanguage = localStorage.getItem('trp_language') || 'ru';
-        let voiceEnabled = true;
-        let recommendedPoint = null;
-        let autoRefreshEnabled = true;
-        let userStats = { totalTrips: 0, totalEarnings: 0, averageFare: 0, hotZonesVisited: 0, achievements: [] };
+        let lastPosSaveAt = 0; // троттлинг сохранения GPS-позиции в IndexedDB (Этап 4)
 
-        try {
-            const saved = localStorage.getItem('trp_stats');
-            if (saved) userStats = JSON.parse(saved);
-        } catch (e) {}
+        // Загрузка статистики из IndexedDB (с авто-миграцией из старого localStorage) — Этап 4
+        (async () => {
+            try {
+                const saved = await idbGet('trp_stats');
+                if (saved && typeof saved === 'object') app.state.userStats = saved;
+            } catch (e) {}
+        })();
 
         // ============================================
         // БАЗА ДАННЫХ СОБЫТИЙ (97 ТОЧЕК)
         // ============================================
-        const masterEventsDB = [
-            // Москва (30)
-            { id: 'msk_1', name: 'Москва-Сити', address: 'Пресненская набережная', city: 'Москва', country: 'Россия', type: 'business', typeLabel: 'БЦ', priceRange: '1200-3500 ₽', avgFare: 2200, intensity: 10, alpha: 93, demandReason: { primary: 'Окончание рабочего дня — VIP клиенты', secondary: 'Топ-менеджеры', peakTime: '17:30-20:30', tips: 'Самые высокие чеки' }, dynamicFactors: [{ factor: 'VIP', impact: '+90%' }], competition: { taxis: 30, ratio: 2.5 }, history: { successRate: 91, avgWait: 6, tripsWeek: 380 }, schedule: 'Пик: 17:30-20:30', lat: 55.7486, lng: 37.5391, verified: false },
-            { id: 'msk_2', name: 'Шереметьево (SVO)', address: 'Аэропорт Шереметьево', city: 'Москва', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '2000-4500 ₽', avgFare: 3000, intensity: 10, alpha: 90, demandReason: { primary: 'Международные рейсы', secondary: 'Туристы с багажом', peakTime: '19:00-22:00', tips: 'Длинные поездки' }, dynamicFactors: [{ factor: 'Международные', impact: '+95%' }], competition: { taxis: 40, ratio: 2.0 }, history: { successRate: 94, avgWait: 8, tripsWeek: 580 }, schedule: 'Пик: 19:00-22:00', lat: 55.9726, lng: 37.4146, verified: false },
-            { id: 'msk_3', name: 'Лужники', address: 'улица Лужники, 24', city: 'Москва', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '1000-2500 ₽', avgFare: 1600, intensity: 9, alpha: 89, demandReason: { primary: 'Футбольный матч', secondary: '81000 зрителей', peakTime: '22:00-23:30', tips: 'Огромный спрос' }, dynamicFactors: [{ factor: 'Матч', impact: '+95%' }], competition: { taxis: 35, ratio: 3.2 }, history: { successRate: 88, avgWait: 10, tripsWeek: 95 }, schedule: 'Матчи: 19:30-22:00', lat: 55.7155, lng: 37.5539, verified: false },
-            { id: 'msk_4', name: 'ВТБ Арена', address: 'Ленинградский проспект, 36', city: 'Москва', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '1000-2200 ₽', avgFare: 1500, intensity: 8, alpha: 86, demandReason: { primary: 'Концерты и матчи', secondary: 'Звёзды эстрады', peakTime: '22:00-23:30', tips: 'Платёжеспособные' }, dynamicFactors: [{ factor: 'Концерт', impact: '+85%' }], competition: { taxis: 25, ratio: 3.0 }, history: { successRate: 86, avgWait: 8, tripsWeek: 120 }, schedule: 'Пик: 22:00-23:30', lat: 55.7940, lng: 37.5647, verified: false },
-            { id: 'msk_5', name: 'Площадь Трёх Вокзалов', address: 'Комсомольская площадь', city: 'Москва', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '1000-2500 ₽', avgFare: 1500, intensity: 9.5, alpha: 87, demandReason: { primary: 'Три вокзала', secondary: 'Приезжие с багажом', peakTime: '17:00-23:00', tips: 'Много заказов' }, dynamicFactors: [{ factor: '3 вокзала', impact: '+100%' }], competition: { taxis: 50, ratio: 1.5 }, history: { successRate: 85, avgWait: 7, tripsWeek: 420 }, schedule: 'Пик: 17:00-23:00', lat: 55.7760, lng: 37.6580, verified: false },
-            { id: 'msk_6', name: 'ГУМ', address: 'Красная площадь, 3', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '1500-3000 ₽', avgFare: 2100, intensity: 8, alpha: 85, demandReason: { primary: 'Элитный ТЦ', secondary: 'VIP покупатели', peakTime: '21:00-22:30', tips: 'Премиум' }, dynamicFactors: [{ factor: 'VIP', impact: '+80%' }], competition: { taxis: 20, ratio: 2.8 }, history: { successRate: 86, avgWait: 5, tripsWeek: 180 }, schedule: 'Закрытие: 22:00', lat: 55.7546, lng: 37.6215, verified: false },
-            { id: 'msk_7', name: 'Большой театр', address: 'Театральная площадь, 1', city: 'Москва', country: 'Россия', type: 'theater', typeLabel: 'Театр', priceRange: '1800-3500 ₽', avgFare: 2500, intensity: 9, alpha: 92, demandReason: { primary: 'Закрытие спектакля', secondary: 'VIP, иностранцы', peakTime: '22:00-23:00', tips: 'Максимальный чек' }, dynamicFactors: [{ factor: 'Театр', impact: '+92%' }], competition: { taxis: 15, ratio: 3.5 }, history: { successRate: 90, avgWait: 5, tripsWeek: 90 }, schedule: 'Пик: 22:00-23:00', lat: 55.7601, lng: 37.6186, verified: false },
-            { id: 'msk_8', name: 'Внуково (VKO)', address: 'Аэропорт Внуково', city: 'Москва', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '1800-4000 ₽', avgFare: 2800, intensity: 9, alpha: 88, demandReason: { primary: 'Второй аэропорт', secondary: 'Командировочные', peakTime: '19:00-22:00', tips: 'Длинные поездки' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+90%' }], competition: { taxis: 35, ratio: 2.0 }, history: { successRate: 91, avgWait: 7, tripsWeek: 490 }, schedule: 'Пик: 19:00-22:00', lat: 55.5986, lng: 37.2724, verified: false },
-            { id: 'msk_9', name: 'Домодедово (DME)', address: 'Аэропорт Домодедово', city: 'Москва', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '2500-5000 ₽', avgFare: 3500, intensity: 9, alpha: 89, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '19:00-22:00', tips: 'Очень длинные поездки' }, dynamicFactors: [{ factor: 'Международный', impact: '+95%' }], competition: { taxis: 30, ratio: 2.2 }, history: { successRate: 92, avgWait: 8, tripsWeek: 450 }, schedule: 'Пик: 19:00-22:00', lat: 55.4088, lng: 37.9063, verified: false },
-            { id: 'msk_10', name: 'Крокус Экспо', address: 'Красногорск', city: 'Москва', country: 'Россия', type: 'exhibition', typeLabel: 'Выставка', priceRange: '1500-3000 ₽', avgFare: 2100, intensity: 9, alpha: 88, demandReason: { primary: 'Крупнейший выставочный центр', secondary: 'Бизнес', peakTime: '18:00-21:00', tips: 'Деловые' }, dynamicFactors: [{ factor: 'Выставка', impact: '+85%' }], competition: { taxis: 20, ratio: 3.0 }, history: { successRate: 87, avgWait: 7, tripsWeek: 150 }, schedule: 'Закрытие: 18:00', lat: 55.8267, lng: 37.3919, verified: false },
-            { id: 'msk_11', name: 'ТЦ Европейский', address: 'пл. Киевского Вокзала, 2', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '1000-2500 ₽', avgFare: 1600, intensity: 8, alpha: 82, demandReason: { primary: 'ТЦ у вокзала', secondary: 'Покупатели', peakTime: '20:00-22:00', tips: 'Средние поездки' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 18, ratio: 3.0 }, history: { successRate: 83, avgWait: 5, tripsWeek: 240 }, schedule: 'Закрытие: 22:00', lat: 55.7446, lng: 37.5663, verified: false },
-            { id: 'msk_12', name: 'Белорусский вокзал', address: 'Тверская Застава, 7', city: 'Москва', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '900-2000 ₽', avgFare: 1300, intensity: 8, alpha: 81, demandReason: { primary: 'Аэроэкспресс', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Аэропорт-трансфер' }, dynamicFactors: [{ factor: 'Аэроэкспресс', impact: '+80%' }], competition: { taxis: 22, ratio: 2.7 }, history: { successRate: 84, avgWait: 5, tripsWeek: 280 }, schedule: 'Пик: 18:00-22:00', lat: 55.7778, lng: 37.5878, verified: false },
-            { id: 'msk_13', name: 'Киевский вокзал', address: 'пл. Киевского Вокзала, 1', city: 'Москва', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '900-1800 ₽', avgFare: 1200, intensity: 8, alpha: 80, demandReason: { primary: 'Поезда в Киев', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 20, ratio: 2.8 }, history: { successRate: 82, avgWait: 5, tripsWeek: 260 }, schedule: 'Пик: 18:00-22:00', lat: 55.7439, lng: 37.5669, verified: false },
-            { id: 'msk_14', name: 'Парк Горького', address: 'Крымский Вал, 9', city: 'Москва', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 7, alpha: 78, demandReason: { primary: 'Вечерние прогулки', secondary: 'Туристы', peakTime: '21:00-23:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вечер', impact: '+70%' }], competition: { taxis: 12, ratio: 3.5 }, history: { successRate: 80, avgWait: 4, tripsWeek: 320 }, schedule: 'Пик: 21:00-23:00', lat: 55.7311, lng: 37.6019, verified: false },
-            { id: 'msk_15', name: 'Арбат', address: 'улица Арбат', city: 'Москва', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '800-1800 ₽', avgFare: 1200, intensity: 8, alpha: 82, demandReason: { primary: 'Историческая улица', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Арбат', impact: '+80%' }], competition: { taxis: 15, ratio: 3.2 }, history: { successRate: 83, avgWait: 4, tripsWeek: 380 }, schedule: 'Пик: 20:00-23:00', lat: 55.7517, lng: 37.5919, verified: false },
-            { id: 'msk_16', name: 'ЦУМ', address: 'Петровка, 2', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '1500-3500 ₽', avgFare: 2300, intensity: 8, alpha: 86, demandReason: { primary: 'Элитный универмаг', secondary: 'VIP', peakTime: '21:00-22:30', tips: 'Премиум' }, dynamicFactors: [{ factor: 'VIP', impact: '+85%' }], competition: { taxis: 16, ratio: 3.0 }, history: { successRate: 87, avgWait: 5, tripsWeek: 160 }, schedule: 'Закрытие: 22:00', lat: 55.7609, lng: 37.6223, verified: false },
-            { id: 'msk_17', name: 'Музей Гараж', address: 'Крымский Вал, 9с32', city: 'Москва', country: 'Россия', type: 'museum', typeLabel: 'Музей', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 7, alpha: 75, demandReason: { primary: 'Закрытие музея', secondary: 'Интеллигенция', peakTime: '20:00-22:00', tips: 'Премиум' }, dynamicFactors: [{ factor: 'Музей', impact: '+65%' }], competition: { taxis: 10, ratio: 3.8 }, history: { successRate: 78, avgWait: 4, tripsWeek: 140 }, schedule: 'Закрытие: 22:00', lat: 55.7319, lng: 37.6033, verified: false },
-            { id: 'msk_18', name: 'Зарядье', address: 'Варварка, 6с1', city: 'Москва', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '900-1800 ₽', avgFare: 1300, intensity: 8, alpha: 83, demandReason: { primary: 'Парк у Кремля', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Зарядье', impact: '+80%' }], competition: { taxis: 14, ratio: 3.3 }, history: { successRate: 84, avgWait: 5, tripsWeek: 290 }, schedule: 'Пик: 20:00-23:00', lat: 55.7514, lng: 37.6289, verified: false },
-            { id: 'msk_19', name: 'Курский вокзал', address: 'Земляной Вал, 29', city: 'Москва', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '900-1900 ₽', avgFare: 1300, intensity: 8, alpha: 81, demandReason: { primary: 'Поезда на юг', secondary: 'Приезжие', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 20, ratio: 2.7 }, history: { successRate: 83, avgWait: 5, tripsWeek: 270 }, schedule: 'Пик: 18:00-22:00', lat: 55.7572, lng: 37.6608, verified: false },
-            { id: 'msk_20', name: 'Открытие Арена', address: 'Волоколамское ш., 69', city: 'Москва', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '1000-2200 ₽', avgFare: 1500, intensity: 8, alpha: 85, demandReason: { primary: 'Матчи ФК Спартак', secondary: '45000 болельщиков', peakTime: '21:30-23:00', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Матч', impact: '+85%' }], competition: { taxis: 22, ratio: 3.0 }, history: { successRate: 85, avgWait: 7, tripsWeek: 85 }, schedule: 'Матчи: 19:30-21:30', lat: 55.8178, lng: 37.4378, verified: false },
-            { id: 'msk_21', name: 'Мега Белая Дача', address: 'Котельники', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 8, alpha: 78, demandReason: { primary: 'Крупный ТЦ', secondary: 'Семьи', peakTime: '21:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 17, ratio: 3.0 }, history: { successRate: 80, avgWait: 6, tripsWeek: 220 }, schedule: 'Закрытие: 22:00', lat: 55.6506, lng: 37.8908, verified: false },
-            { id: 'msk_22', name: 'Мега Химки', address: 'Химки', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 8, alpha: 78, demandReason: { primary: 'Крупный ТЦ', secondary: 'Семьи', peakTime: '21:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 16, ratio: 3.0 }, history: { successRate: 80, avgWait: 6, tripsWeek: 210 }, schedule: 'Закрытие: 22:00', lat: 55.8944, lng: 37.4097, verified: false },
-            { id: 'msk_23', name: 'Мега Тёплый Стан', address: 'Калужское шоссе', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 8, alpha: 79, demandReason: { primary: 'Крупный ТЦ', secondary: 'Покупатели', peakTime: '21:00-23:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 16, ratio: 3.0 }, history: { successRate: 81, avgWait: 5, tripsWeek: 230 }, schedule: 'Закрытие: 22:00', lat: 55.6022, lng: 37.5250, verified: false },
-            { id: 'msk_24', name: 'Авиапарк', address: 'Ходынский б-р, 4', city: 'Москва', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 8, alpha: 79, demandReason: { primary: 'Крупнейший ТЦ Европы', secondary: 'Массовый отток', peakTime: '21:00-23:00', tips: 'Много заказов' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 20, ratio: 3.0 }, history: { successRate: 82, avgWait: 5, tripsWeek: 260 }, schedule: 'Закрытие: 22:00', lat: 55.7894, lng: 37.5311, verified: false },
-            { id: 'msk_25', name: 'Экспоцентр', address: 'Краснопресненская наб., 14', city: 'Москва', country: 'Россия', type: 'exhibition', typeLabel: 'Выставка', priceRange: '1200-2500 ₽', avgFare: 1700, intensity: 8, alpha: 84, demandReason: { primary: 'Крупные выставки', secondary: 'Бизнес', peakTime: '17:30-20:00', tips: 'Деловые' }, dynamicFactors: [{ factor: 'Выставка', impact: '+80%' }], competition: { taxis: 18, ratio: 3.2 }, history: { successRate: 85, avgWait: 6, tripsWeek: 125 }, schedule: 'Закрытие: 18:00', lat: 55.7534, lng: 37.5483, verified: false },
-            { id: 'msk_26', name: 'Сокольники', address: 'Сокольнический Вал, 1', city: 'Москва', country: 'Россия', type: 'park', typeLabel: 'Парк', priceRange: '600-1100 ₽', avgFare: 800, intensity: 7, alpha: 72, demandReason: { primary: 'Закрытие парка', secondary: 'Семьи', peakTime: '21:00-23:00', tips: 'Короткие' }, dynamicFactors: [{ factor: 'Парк', impact: '+60%' }], competition: { taxis: 7, ratio: 4.0 }, history: { successRate: 76, avgWait: 4, tripsWeek: 180 }, schedule: 'Закрытие: 22:00', lat: 55.7922, lng: 37.6797, verified: false },
-            { id: 'msk_27', name: 'ВДНХ', address: 'проспект Мира, 119', city: 'Москва', country: 'Россия', type: 'exhibition', typeLabel: 'Выставка', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 8, alpha: 81, demandReason: { primary: 'Выставочный комплекс', secondary: 'Закрытие', peakTime: '20:00-22:00', tips: 'Семьи, туристы' }, dynamicFactors: [{ factor: 'ВДНХ', impact: '+75%' }], competition: { taxis: 18, ratio: 3.0 }, history: { successRate: 83, avgWait: 5, tripsWeek: 210 }, schedule: 'Закрытие: 22:00', lat: 55.8264, lng: 37.6376, verified: false },
-            { id: 'msk_28', name: 'Останкинская башня', address: 'Академика Королёва, 15к2', city: 'Москва', country: 'Россия', type: 'attraction', typeLabel: 'Достопримечательность', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 7, alpha: 74, demandReason: { primary: 'Закрытие башни', secondary: 'Туристы', peakTime: '20:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Туристы', impact: '+65%' }], competition: { taxis: 9, ratio: 3.5 }, history: { successRate: 78, avgWait: 5, tripsWeek: 140 }, schedule: 'Закрытие: 22:00', lat: 55.8197, lng: 37.6117, verified: false },
-            { id: 'msk_29', name: 'Депо (Фудмолл)', address: 'Лесная, 20с1', city: 'Москва', country: 'Россия', type: 'restaurant', typeLabel: 'Фудмолл', priceRange: '1000-2000 ₽', avgFare: 1400, intensity: 8, alpha: 82, demandReason: { primary: 'Фудмолл закрытие', secondary: 'Молодёжь', peakTime: '23:00-01:00', tips: 'Ночные' }, dynamicFactors: [{ factor: 'Фудмолл', impact: '+80%' }], competition: { taxis: 10, ratio: 4.0 }, history: { successRate: 83, avgWait: 4, tripsWeek: 180 }, schedule: 'Закрытие: 01:00', lat: 55.7800, lng: 37.5914, verified: false },
-            { id: 'msk_30', name: 'Клуб Gipsy', address: 'Болотная наб., 3/4', city: 'Москва', country: 'Россия', type: 'nightclub', typeLabel: 'Клуб', priceRange: '1500-3000 ₽', avgFare: 2200, intensity: 9, alpha: 88, demandReason: { primary: 'Закрытие клуба', secondary: 'VIP гости', peakTime: '04:00-06:00', tips: 'Ночные премиум' }, dynamicFactors: [{ factor: 'Ночной клуб', impact: '+90%' }], competition: { taxis: 8, ratio: 5.0 }, history: { successRate: 89, avgWait: 3, tripsWeek: 140 }, schedule: 'Закрытие: 06:00', lat: 55.7416, lng: 37.6139, verified: false },
-
-            // Санкт-Петербург (15)
-            { id: 'spb_1', name: 'Пулково (LED)', address: 'Пулковское ш., 41', city: 'Санкт-Петербург', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '1500-3000 ₽', avgFare: 2200, intensity: 9.5, alpha: 88, demandReason: { primary: 'Главный аэропорт СПб', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+85%' }], competition: { taxis: 28, ratio: 2.3 }, history: { successRate: 91, avgWait: 7, tripsWeek: 420 }, schedule: 'Пик: 20:00-23:00', lat: 59.7998, lng: 30.2705, verified: false },
-            { id: 'spb_2', name: 'Московский вокзал', address: 'Невский пр., 85', city: 'Санкт-Петербург', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '800-1800 ₽', avgFare: 1200, intensity: 9, alpha: 84, demandReason: { primary: 'Прибытие Сапсанов', secondary: 'Бизнес', peakTime: '19:00-21:30', tips: 'Сапсан' }, dynamicFactors: [{ factor: 'Сапсан', impact: '+80%' }], competition: { taxis: 20, ratio: 2.0 }, history: { successRate: 86, avgWait: 5, tripsWeek: 280 }, schedule: 'Пик: 19:00-21:30', lat: 59.9296, lng: 30.3618, verified: false },
-            { id: 'spb_3', name: 'Эрмитаж', address: 'Дворцовая пл., 2', city: 'Санкт-Петербург', country: 'Россия', type: 'museum', typeLabel: 'Музей', priceRange: '1000-2000 ₽', avgFare: 1400, intensity: 8, alpha: 83, demandReason: { primary: 'Закрытие музея', secondary: 'Интеллигенция', peakTime: '18:00-20:00', tips: 'Премиум' }, dynamicFactors: [{ factor: 'Эрмитаж', impact: '+80%' }], competition: { taxis: 12, ratio: 3.5 }, history: { successRate: 85, avgWait: 5, tripsWeek: 210 }, schedule: 'Закрытие: 18:00', lat: 59.9398, lng: 30.3146, verified: false },
-            { id: 'spb_4', name: 'Мариинский театр', address: 'Театральная пл., 1', city: 'Санкт-Петербург', country: 'Россия', type: 'theater', typeLabel: 'Театр', priceRange: '1500-3500 ₽', avgFare: 2400, intensity: 9, alpha: 91, demandReason: { primary: 'Знаменитый театр', secondary: 'VIP', peakTime: '22:00-23:30', tips: 'Макс. чек' }, dynamicFactors: [{ factor: 'Мариинский', impact: '+95%' }], competition: { taxis: 10, ratio: 4.0 }, history: { successRate: 89, avgWait: 6, tripsWeek: 95 }, schedule: 'Пик: 22:00-23:30', lat: 59.9244, lng: 30.2961, verified: false },
-            { id: 'spb_5', name: 'Газпром Арена', address: 'Южная дор., 25', city: 'Санкт-Петербург', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '1000-2200 ₽', avgFare: 1500, intensity: 9, alpha: 87, demandReason: { primary: 'Матчи Зенита', secondary: '68000 болельщиков', peakTime: '21:30-23:00', tips: 'Огромный спрос' }, dynamicFactors: [{ factor: 'Матч', impact: '+90%' }], competition: { taxis: 30, ratio: 3.0 }, history: { successRate: 86, avgWait: 9, tripsWeek: 85 }, schedule: 'Матчи: 19:30-21:30', lat: 59.9728, lng: 30.2214, verified: false },
-            { id: 'spb_6', name: 'Лахта Центр', address: 'Лахтинский пр., 2', city: 'Санкт-Петербург', country: 'Россия', type: 'business', typeLabel: 'БЦ', priceRange: '1500-3000 ₽', avgFare: 2100, intensity: 9, alpha: 88, demandReason: { primary: 'Самый высокий БЦ в Европе', secondary: 'Топ-менеджеры', peakTime: '17:30-20:30', tips: 'VIP' }, dynamicFactors: [{ factor: 'Лахта', impact: '+90%' }], competition: { taxis: 18, ratio: 2.8 }, history: { successRate: 88, avgWait: 6, tripsWeek: 220 }, schedule: 'Пик: 17:30-20:30', lat: 59.9897, lng: 30.1789, verified: false },
-            { id: 'spb_7', name: 'Исаакиевский собор', address: 'Исаакиевская пл., 4', city: 'Санкт-Петербург', country: 'Россия', type: 'museum', typeLabel: 'Музей', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 7, alpha: 76, demandReason: { primary: 'Закрытие собора', secondary: 'Туристы', peakTime: '18:00-20:00', tips: 'Премиум' }, dynamicFactors: [{ factor: 'Собор', impact: '+70%' }], competition: { taxis: 9, ratio: 3.5 }, history: { successRate: 79, avgWait: 5, tripsWeek: 180 }, schedule: 'Закрытие: 18:00', lat: 59.9341, lng: 30.3064, verified: false },
-            { id: 'spb_8', name: 'Невский проспект', address: 'Невский пр.', city: 'Санкт-Петербург', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '800-1800 ₽', avgFare: 1200, intensity: 9, alpha: 85, demandReason: { primary: 'Главная улица', secondary: 'Туристы', peakTime: '21:00-23:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Невский', impact: '+85%' }], competition: { taxis: 20, ratio: 3.0 }, history: { successRate: 85, avgWait: 4, tripsWeek: 480 }, schedule: 'Пик: 21:00-23:00', lat: 59.9343, lng: 30.3351, verified: false },
-            { id: 'spb_9', name: 'Русский музей', address: 'Инженерная, 4', city: 'Санкт-Петербург', country: 'Россия', type: 'museum', typeLabel: 'Музей', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 7, alpha: 75, demandReason: { primary: 'Закрытие музея', secondary: 'Интеллигенция', peakTime: '18:00-20:00', tips: 'Премиум' }, dynamicFactors: [{ factor: 'Музей', impact: '+70%' }], competition: { taxis: 8, ratio: 4.0 }, history: { successRate: 78, avgWait: 5, tripsWeek: 140 }, schedule: 'Закрытие: 18:00', lat: 59.9386, lng: 30.3331, verified: false },
-            { id: 'spb_10', name: 'Петропавловская крепость', address: 'Заячий о-в, 3', city: 'Санкт-Петербург', country: 'Россия', type: 'museum', typeLabel: 'Музей', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 7, alpha: 75, demandReason: { primary: 'Закрытие крепости', secondary: 'Туристы', peakTime: '18:00-20:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Крепость', impact: '+70%' }], competition: { taxis: 9, ratio: 3.5 }, history: { successRate: 78, avgWait: 5, tripsWeek: 170 }, schedule: 'Закрытие: 18:00', lat: 59.9500, lng: 30.3167, verified: false },
-            { id: 'spb_11', name: 'ТРЦ Галерея', address: 'Лиговский пр., 30а', city: 'Санкт-Петербург', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '700-1500 ₽', avgFare: 1000, intensity: 8, alpha: 79, demandReason: { primary: 'Крупный ТЦ', secondary: 'Покупатели', peakTime: '21:00-23:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 14, ratio: 3.0 }, history: { successRate: 81, avgWait: 4, tripsWeek: 240 }, schedule: 'Закрытие: 22:00', lat: 59.9272, lng: 30.3592, verified: false },
-            { id: 'spb_12', name: 'ДЛТ', address: 'Большая Конюшенная, 14', city: 'Санкт-Петербург', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '1200-2800 ₽', avgFare: 1900, intensity: 8, alpha: 84, demandReason: { primary: 'Элитный универмаг', secondary: 'VIP', peakTime: '21:00-22:30', tips: 'Высокий чек' }, dynamicFactors: [{ factor: 'ДЛТ', impact: '+85%' }], competition: { taxis: 10, ratio: 4.0 }, history: { successRate: 85, avgWait: 5, tripsWeek: 150 }, schedule: 'Закрытие: 22:00', lat: 59.9364, lng: 30.3186, verified: false },
-            { id: 'spb_13', name: 'Ледовый дворец', address: 'пр. Пятилеток, 1', city: 'Санкт-Петербург', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '900-1800 ₽', avgFare: 1300, intensity: 8, alpha: 82, demandReason: { primary: 'Концерты и хоккей', secondary: 'Болельщики', peakTime: '22:00-23:30', tips: 'Группы' }, dynamicFactors: [{ factor: 'Матч', impact: '+80%' }], competition: { taxis: 15, ratio: 3.0 }, history: { successRate: 83, avgWait: 6, tripsWeek: 85 }, schedule: 'Матчи: 19:30-21:30', lat: 59.9314, lng: 30.4411, verified: false },
-            { id: 'spb_14', name: 'Финляндский вокзал', address: 'пл. Ленина, 6', city: 'Санкт-Петербург', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 8, alpha: 80, demandReason: { primary: 'Крупный вокзал', secondary: 'Приезжие', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 15, ratio: 3.0 }, history: { successRate: 81, avgWait: 5, tripsWeek: 220 }, schedule: 'Пик: 18:00-22:00', lat: 59.9553, lng: 30.3558, verified: false },
-            { id: 'spb_15', name: 'Развод мостов', address: 'Наб. Невы', city: 'Санкт-Петербург', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '1000-2500 ₽', avgFare: 1600, intensity: 8, alpha: 85, demandReason: { primary: 'Развод мостов ночью', secondary: 'Туристы', peakTime: '01:30-04:00', tips: 'Ночные' }, dynamicFactors: [{ factor: 'Развод мостов', impact: '+85%' }], competition: { taxis: 15, ratio: 3.5 }, history: { successRate: 86, avgWait: 6, tripsWeek: 280 }, schedule: 'Пик: 01:30-04:00', lat: 59.9443, lng: 30.3063, verified: false },
-
-            // Новосибирск (12)
-            { id: 'nsk_1', name: 'ЛДС Сибирь', address: 'Немировича-Данченко, 160', city: 'Новосибирск', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '800-1800 ₽', avgFare: 1100, intensity: 9, alpha: 92, demandReason: { primary: 'Хоккейный матч', secondary: '7000 болельщиков', peakTime: '22:30-23:15', tips: 'Группы' }, dynamicFactors: [{ factor: 'Матч', impact: '+85%' }], competition: { taxis: 12, ratio: 3.5 }, history: { successRate: 87, avgWait: 4, tripsWeek: 156 }, schedule: 'Матчи: 19:00-22:30', lat: 55.0308, lng: 82.9208, verified: false },
-            { id: 'nsk_2', name: 'Аэропорт Толмачёво', address: 'пр. Мозжерина, 8А', city: 'Новосибирск', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '1800-3500 ₽', avgFare: 2500, intensity: 10, alpha: 88, demandReason: { primary: 'Прибытие рейсов', secondary: 'Туристы', peakTime: '19:30-21:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Прилёт', impact: '+90%' }], competition: { taxis: 25, ratio: 2.1 }, history: { successRate: 92, avgWait: 6, tripsWeek: 340 }, schedule: 'Пик: 19:30', lat: 55.0125, lng: 82.6655, verified: false },
-            { id: 'nsk_3', name: 'Новосибирск-Главный', address: 'Шамшурина, 43', city: 'Новосибирск', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '800-1400 ₽', avgFare: 1000, intensity: 8.5, alpha: 80, demandReason: { primary: 'Поезда дальнего следования', secondary: 'Пассажиры', peakTime: '19:00-21:00', tips: 'Средние и длинные' }, dynamicFactors: [{ factor: 'Поезда', impact: '+75%' }], competition: { taxis: 18, ratio: 1.8 }, history: { successRate: 85, avgWait: 5, tripsWeek: 210 }, schedule: 'Пик: 19:00-21:00', lat: 55.0355, lng: 82.8981, verified: false },
-            { id: 'nsk_4', name: 'ТРЦ Галерея', address: 'Гоголя, 13', city: 'Новосибирск', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '700-1200 ₽', avgFare: 900, intensity: 8, alpha: 76, demandReason: { primary: 'Закрытие ТЦ', secondary: 'Покупатели', peakTime: '21:00-22:30', tips: 'Короткие' }, dynamicFactors: [{ factor: 'Закрытие ТЦ', impact: '+70%' }], competition: { taxis: 8, ratio: 4.2 }, history: { successRate: 78, avgWait: 3, tripsWeek: 180 }, schedule: 'Закрытие: 22:00', lat: 55.0422, lng: 82.9248, verified: false },
-            { id: 'nsk_5', name: 'ТРЦ Аура', address: 'Военная, 5', city: 'Новосибирск', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '800-1300 ₽', avgFare: 1000, intensity: 8, alpha: 78, demandReason: { primary: 'Семейный ТЦ', secondary: 'Семьи', peakTime: '20:00-22:00', tips: 'Детские кресла' }, dynamicFactors: [{ factor: 'Семьи', impact: '+65%' }], competition: { taxis: 10, ratio: 3.8 }, history: { successRate: 80, avgWait: 4, tripsWeek: 165 }, schedule: 'Пик: 20:00-22:00', lat: 55.0264, lng: 82.9402, verified: false },
-            { id: 'nsk_6', name: 'Зоопарк имени Шило', address: 'Тимирязева, 71/1', city: 'Новосибирск', country: 'Россия', type: 'attraction', typeLabel: 'Зоопарк', priceRange: '700-1200 ₽', avgFare: 900, intensity: 7, alpha: 70, demandReason: { primary: 'Семейный отдых', secondary: 'Семьи', peakTime: '15:00-18:00', tips: 'Детские кресла' }, dynamicFactors: [{ factor: 'Семьи', impact: '+55%' }], competition: { taxis: 7, ratio: 4.5 }, history: { successRate: 75, avgWait: 4, tripsWeek: 110 }, schedule: 'Пик: 15:00-18:00', lat: 55.0473, lng: 82.9183, verified: false },
-            { id: 'nsk_7', name: 'БЦ Сан Сити', address: 'Красный пр., 98', city: 'Новосибирск', country: 'Россия', type: 'business', typeLabel: 'БЦ', priceRange: '1200-2500 ₽', avgFare: 1800, intensity: 9, alpha: 85, demandReason: { primary: 'Конец рабочего дня', secondary: 'Бизнес', peakTime: '17:30-20:30', tips: 'Корпоративные' }, dynamicFactors: [{ factor: 'Конец дня', impact: '+80%' }], competition: { taxis: 15, ratio: 2.5 }, history: { successRate: 88, avgWait: 5, tripsWeek: 220 }, schedule: 'Пик: 17:30-20:30', lat: 55.0408, lng: 82.9239, verified: false },
-            { id: 'nsk_8', name: 'Клуб Локомотив', address: 'Вокзальная маг., 25/1', city: 'Новосибирск', country: 'Россия', type: 'nightclub', typeLabel: 'Клуб', priceRange: '1000-2000 ₽', avgFare: 1500, intensity: 8, alpha: 84, demandReason: { primary: 'Закрытие клуба', secondary: 'Ночная жизнь', peakTime: '02:00-04:00', tips: 'Ночные' }, dynamicFactors: [{ factor: 'Закрытие клуба', impact: '+90%' }], competition: { taxis: 5, ratio: 6.0 }, history: { successRate: 90, avgWait: 3, tripsWeek: 95 }, schedule: 'Закрытие: 02:00-04:00', lat: 55.0369, lng: 82.9212, verified: false },
-            { id: 'nsk_9', name: 'Оперный театр', address: 'Красный пр., 36', city: 'Новосибирск', country: 'Россия', type: 'theater', typeLabel: 'Театр', priceRange: '900-1800 ₽', avgFare: 1300, intensity: 8, alpha: 83, demandReason: { primary: 'Закрытие спектакля', secondary: 'Интеллигенция', peakTime: '21:30-22:30', tips: 'Премиум' }, dynamicFactors: [{ factor: 'Спектакль', impact: '+70%' }], competition: { taxis: 9, ratio: 4.0 }, history: { successRate: 85, avgWait: 4, tripsWeek: 90 }, schedule: 'Пик: 21:30-22:30', lat: 55.0309, lng: 82.9239, verified: false },
-            { id: 'nsk_10', name: 'Михайловская набережная', address: 'Обская, 2', city: 'Новосибирск', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '900-1600 ₽', avgFare: 1200, intensity: 8.5, alpha: 82, demandReason: { primary: 'Вечерние прогулки', secondary: 'Туристы', peakTime: '22:00-23:59', tips: 'Короткие' }, dynamicFactors: [{ factor: 'Вечерний пик', impact: '+60%' }], competition: { taxis: 6, ratio: 5.0 }, history: { successRate: 83, avgWait: 3, tripsWeek: 140 }, schedule: 'Пик: 22:00-23:59', lat: 55.0453, lng: 82.9242, verified: false },
-            { id: 'nsk_11', name: 'ТРЦ Мега', address: 'Ватутина, 107', city: 'Новосибирск', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '800-1400 ₽', avgFare: 1050, intensity: 8, alpha: 77, demandReason: { primary: 'Крупный ТЦ', secondary: 'Покупатели', peakTime: '21:00-23:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Мега', impact: '+70%' }], competition: { taxis: 12, ratio: 3.5 }, history: { successRate: 80, avgWait: 4, tripsWeek: 200 }, schedule: 'Пик: 21:00-23:00', lat: 55.0175, lng: 82.8542, verified: false },
-            { id: 'nsk_12', name: 'Экспоцентр', address: 'Станционная, 30А', city: 'Новосибирск', country: 'Россия', type: 'exhibition', typeLabel: 'Выставка', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 8, alpha: 79, demandReason: { primary: 'Крупная выставка', secondary: 'Бизнес', peakTime: '17:30-19:00', tips: 'Деловые' }, dynamicFactors: [{ factor: 'Выставка', impact: '+75%' }], competition: { taxis: 14, ratio: 2.8 }, history: { successRate: 82, avgWait: 6, tripsWeek: 125 }, schedule: 'Закрытие: 18:00', lat: 54.9850, lng: 82.8450, verified: false },
-
-            // Екатеринбург (6)
-            { id: 'ekb_1', name: 'Кольцово', address: 'Аэропорт Кольцово', city: 'Екатеринбург', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '1200-2500 ₽', avgFare: 1800, intensity: 9, alpha: 86, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '19:00-22:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+85%' }], competition: { taxis: 22, ratio: 2.4 }, history: { successRate: 89, avgWait: 6, tripsWeek: 310 }, schedule: 'Пик: 19:00-22:00', lat: 56.7454, lng: 60.8037, verified: false },
-            { id: 'ekb_2', name: 'Екатеринбург-Сити', address: '8 Марта, 13', city: 'Екатеринбург', country: 'Россия', type: 'business', typeLabel: 'БЦ', priceRange: '1000-2200 ₽', avgFare: 1500, intensity: 8, alpha: 83, demandReason: { primary: 'БЦ класса А', secondary: 'Бизнес', peakTime: '17:30-20:00', tips: 'Корпоративные' }, dynamicFactors: [{ factor: 'БЦ', impact: '+80%' }], competition: { taxis: 14, ratio: 2.8 }, history: { successRate: 85, avgWait: 5, tripsWeek: 200 }, schedule: 'Пик: 17:30-20:00', lat: 56.8290, lng: 60.5985, verified: false },
-            { id: 'ekb_3', name: 'ТРЦ Гринвич', address: '8 Марта, 46', city: 'Екатеринбург', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '700-1400 ₽', avgFare: 1000, intensity: 8, alpha: 78, demandReason: { primary: 'Крупный ТЦ', secondary: 'Покупатели', peakTime: '21:00-23:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 12, ratio: 3.2 }, history: { successRate: 80, avgWait: 4, tripsWeek: 220 }, schedule: 'Закрытие: 22:00', lat: 56.8278, lng: 60.5965, verified: false },
-            { id: 'ekb_4', name: 'ЖД Вокзал', address: 'Вокзальная, 22', city: 'Екатеринбург', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '700-1300 ₽', avgFare: 950, intensity: 8, alpha: 79, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 16, ratio: 2.8 }, history: { successRate: 82, avgWait: 5, tripsWeek: 230 }, schedule: 'Пик: 18:00-22:00', lat: 56.8389, lng: 60.6057, verified: false },
-            { id: 'ekb_5', name: 'Екатеринбург-Арена', address: 'Репина, 5', city: 'Екатеринбург', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '800-1600 ₽', avgFare: 1150, intensity: 8, alpha: 82, demandReason: { primary: 'Матчи и концерты', secondary: 'Болельщики', peakTime: '21:30-23:00', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Матч', impact: '+80%' }], competition: { taxis: 15, ratio: 3.0 }, history: { successRate: 84, avgWait: 6, tripsWeek: 90 }, schedule: 'Матчи: 19:30-21:30', lat: 56.8378, lng: 60.5739, verified: false },
-            { id: 'ekb_6', name: 'Ельцин-центр', address: 'Бориса Ельцина, 3', city: 'Екатеринбург', country: 'Россия', type: 'museum', typeLabel: 'Музей', priceRange: '700-1300 ₽', avgFare: 950, intensity: 7, alpha: 74, demandReason: { primary: 'Закрытие центра', secondary: 'Интеллигенция', peakTime: '19:00-21:00', tips: 'Премиум' }, dynamicFactors: [{ factor: 'Музей', impact: '+65%' }], competition: { taxis: 9, ratio: 3.8 }, history: { successRate: 77, avgWait: 5, tripsWeek: 130 }, schedule: 'Закрытие: 21:00', lat: 56.8381, lng: 60.5892, verified: false },
-
-            // Казань (6)
-            { id: 'kzn_1', name: 'Аэропорт Казань', address: 'Аэропорт', city: 'Казань', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '1200-2800 ₽', avgFare: 1900, intensity: 9, alpha: 86, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '19:00-22:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+85%' }], competition: { taxis: 20, ratio: 2.6 }, history: { successRate: 88, avgWait: 6, tripsWeek: 280 }, schedule: 'Пик: 19:00-22:00', lat: 55.6062, lng: 49.2787, verified: false },
-            { id: 'kzn_2', name: 'Казань Арена', address: 'Ямашева, 114А', city: 'Казань', country: 'Россия', type: 'stadium', typeLabel: 'Стадион', priceRange: '900-2000 ₽', avgFare: 1400, intensity: 8, alpha: 85, demandReason: { primary: 'Футбольные матчи', secondary: 'Массовые события', peakTime: '22:00-23:30', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Матч', impact: '+85%' }], competition: { taxis: 18, ratio: 3.0 }, history: { successRate: 86, avgWait: 7, tripsWeek: 95 }, schedule: 'Матчи: 19:30-22:00', lat: 55.8114, lng: 49.1575, verified: false },
-            { id: 'kzn_3', name: 'ТРЦ Мега', address: 'Победы, 141', city: 'Казань', country: 'Россия', type: 'shopping', typeLabel: 'ТЦ', priceRange: '700-1400 ₽', avgFare: 1000, intensity: 8, alpha: 78, demandReason: { primary: 'Крупный ТЦ', secondary: 'Семьи', peakTime: '20:00-22:00', tips: 'Семейные' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 12, ratio: 3.2 }, history: { successRate: 80, avgWait: 4, tripsWeek: 210 }, schedule: 'Закрытие: 22:00', lat: 55.7758, lng: 49.2173, verified: false },
-            { id: 'kzn_4', name: 'Казанский Кремль', address: 'Кремль, 5', city: 'Казань', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '800-1500 ₽', avgFare: 1100, intensity: 8, alpha: 80, demandReason: { primary: 'Туристический центр', secondary: 'Туристы', peakTime: '19:00-21:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Кремль', impact: '+80%' }], competition: { taxis: 13, ratio: 3.2 }, history: { successRate: 82, avgWait: 5, tripsWeek: 260 }, schedule: 'Пик: 19:00-21:00', lat: 55.7983, lng: 49.1058, verified: false },
-            { id: 'kzn_5', name: 'ЖД Вокзал Казань-1', address: 'Привокзальная пл., 1', city: 'Казань', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '700-1300 ₽', avgFare: 950, intensity: 8, alpha: 79, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 16, ratio: 2.8 }, history: { successRate: 82, avgWait: 5, tripsWeek: 220 }, schedule: 'Пик: 18:00-22:00', lat: 55.7858, lng: 49.1161, verified: false },
-            { id: 'kzn_6', name: 'Улица Баумана', address: 'Баумана', city: 'Казань', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '700-1400 ₽', avgFare: 1000, intensity: 8, alpha: 80, demandReason: { primary: 'Пешеходная улица', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Улица', impact: '+80%' }], competition: { taxis: 12, ratio: 3.3 }, history: { successRate: 82, avgWait: 4, tripsWeek: 280 }, schedule: 'Пик: 20:00-23:00', lat: 55.7897, lng: 49.1189, verified: false },
-
-            // Сочи (5)
-            { id: 'sochi_1', name: 'Аэропорт Сочи', address: 'Мира, 50', city: 'Сочи', country: 'Россия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '1500-4000 ₽', avgFare: 2500, intensity: 10, alpha: 90, demandReason: { primary: 'Главный аэропорт курорта', secondary: 'Туристы', peakTime: '19:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Курорт', impact: '+90%' }], competition: { taxis: 25, ratio: 2.2 }, history: { successRate: 92, avgWait: 7, tripsWeek: 450 }, schedule: 'Пик: 19:00-23:00', lat: 43.4483, lng: 39.9422, verified: false },
-            { id: 'sochi_2', name: 'Морпорт Сочи', address: 'Войкова, 1', city: 'Сочи', country: 'Россия', type: 'tourist', typeLabel: 'Туризм', priceRange: '1000-2500 ₽', avgFare: 1600, intensity: 9, alpha: 85, demandReason: { primary: 'Туристический центр', secondary: 'Отдыхающие', peakTime: '21:00-23:59', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Морпорт', impact: '+85%' }], competition: { taxis: 15, ratio: 3.5 }, history: { successRate: 87, avgWait: 5, tripsWeek: 280 }, schedule: 'Пик: 21:00-23:59', lat: 43.5806, lng: 39.7171, verified: false },
-            { id: 'sochi_3', name: 'Сочи Парк', address: 'Олимпийский пр., 21', city: 'Сочи', country: 'Россия', type: 'attraction', typeLabel: 'Аттракцион', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 8, alpha: 79, demandReason: { primary: 'Закрытие парка', secondary: 'Семьи', peakTime: '20:00-22:00', tips: 'Семьи' }, dynamicFactors: [{ factor: 'Парк', impact: '+75%' }], competition: { taxis: 10, ratio: 3.5 }, history: { successRate: 80, avgWait: 5, tripsWeek: 200 }, schedule: 'Закрытие: 22:00', lat: 43.4089, lng: 39.9564, verified: false },
-            { id: 'sochi_4', name: 'Роза Хутор', address: 'Олимпийская, 35', city: 'Сочи', country: 'Россия', type: 'attraction', typeLabel: 'Курорт', priceRange: '1500-3000 ₽', avgFare: 2000, intensity: 8, alpha: 83, demandReason: { primary: 'Закрытие курорта', secondary: 'Туристы', peakTime: '18:00-20:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Курорт', impact: '+80%' }], competition: { taxis: 10, ratio: 3.5 }, history: { successRate: 84, avgWait: 6, tripsWeek: 180 }, schedule: 'Закрытие: 20:00', lat: 43.6714, lng: 40.3022, verified: false },
-            { id: 'sochi_5', name: 'ЖД Вокзал Сочи', address: 'Горького, 60', city: 'Сочи', country: 'Россия', type: 'railway', typeLabel: 'ЖД', priceRange: '800-1600 ₽', avgFare: 1100, intensity: 8, alpha: 80, demandReason: { primary: 'Прибытие поездов', secondary: 'Туристы', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 14, ratio: 3.0 }, history: { successRate: 82, avgWait: 5, tripsWeek: 230 }, schedule: 'Пик: 18:00-22:00', lat: 43.5853, lng: 39.7239, verified: false },
-
-            // Баку (5)
-            { id: 'bku_1', name: 'Аэропорт Гейдар Алиев', address: 'Баку, аэропорт', city: 'Баку', country: 'Азербайджан', type: 'airport', typeLabel: 'Аэропорт', priceRange: '15-30 AZN', avgFare: 22, intensity: 9, alpha: 87, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+85%' }], competition: { taxis: 20, ratio: 2.5 }, history: { successRate: 89, avgWait: 6, tripsWeek: 350 }, schedule: 'Пик: 20:00-23:00', lat: 40.4675, lng: 50.0467, verified: false },
-            { id: 'bku_2', name: 'Приморский бульвар', address: 'Баку', city: 'Баку', country: 'Азербайджан', type: 'tourist', typeLabel: 'Туризм', priceRange: '8-15 AZN', avgFare: 11, intensity: 8, alpha: 82, demandReason: { primary: 'Вечерние прогулки', secondary: 'Туристы', peakTime: '21:00-23:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вечер', impact: '+75%' }], competition: { taxis: 15, ratio: 3.0 }, history: { successRate: 83, avgWait: 4, tripsWeek: 250 }, schedule: 'Пик: 21:00-23:00', lat: 40.3725, lng: 49.8531, verified: false },
-            { id: 'bku_3', name: 'Баку Кристалл Холл', address: 'пр. Нефтчи', city: 'Баку', country: 'Азербайджан', type: 'stadium', typeLabel: 'Стадион', priceRange: '12-25 AZN', avgFare: 18, intensity: 8, alpha: 84, demandReason: { primary: 'Концерты и спорт', secondary: 'Массовые события', peakTime: '22:00-23:30', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Концерт', impact: '+80%' }], competition: { taxis: 12, ratio: 3.5 }, history: { successRate: 85, avgWait: 6, tripsWeek: 80 }, schedule: 'Пик: 22:00-23:30', lat: 40.3611, lng: 49.8472, verified: false },
-            { id: 'bku_4', name: 'Ичери-шехер', address: 'Старый город', city: 'Баку', country: 'Азербайджан', type: 'tourist', typeLabel: 'Туризм', priceRange: '6-12 AZN', avgFare: 9, intensity: 8, alpha: 80, demandReason: { primary: 'Исторический центр', secondary: 'Туристы', peakTime: '19:00-22:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Туризм', impact: '+80%' }], competition: { taxis: 12, ratio: 3.3 }, history: { successRate: 82, avgWait: 4, tripsWeek: 280 }, schedule: 'Пик: 19:00-22:00', lat: 40.3667, lng: 49.8333, verified: false },
-            { id: 'bku_5', name: 'ЖД Вокзал Баку', address: 'пр. Нобеля', city: 'Баку', country: 'Азербайджан', type: 'railway', typeLabel: 'ЖД', priceRange: '6-12 AZN', avgFare: 9, intensity: 7, alpha: 76, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+70%' }], competition: { taxis: 14, ratio: 2.8 }, history: { successRate: 79, avgWait: 5, tripsWeek: 180 }, schedule: 'Пик: 18:00-22:00', lat: 40.3892, lng: 49.8597, verified: false },
-
-            // Минск (5)
-            { id: 'min_1', name: 'Аэропорт Минск', address: 'Минск, аэропорт', city: 'Минск', country: 'Беларусь', type: 'airport', typeLabel: 'Аэропорт', priceRange: '30-60 BYN', avgFare: 45, intensity: 8, alpha: 85, demandReason: { primary: 'Национальный аэропорт', secondary: 'Пассажиры', peakTime: '19:00-22:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+80%' }], competition: { taxis: 18, ratio: 2.8 }, history: { successRate: 87, avgWait: 6, tripsWeek: 280 }, schedule: 'Пик: 19:00-22:00', lat: 53.8825, lng: 28.0308, verified: false },
-            { id: 'min_2', name: 'Минск-Арена', address: 'пр. Победителей, 111', city: 'Минск', country: 'Беларусь', type: 'stadium', typeLabel: 'Стадион', priceRange: '20-40 BYN', avgFare: 28, intensity: 8, alpha: 83, demandReason: { primary: 'Хоккей и концерты', secondary: 'Болельщики', peakTime: '21:30-23:00', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Матч', impact: '+80%' }], competition: { taxis: 14, ratio: 3.0 }, history: { successRate: 84, avgWait: 6, tripsWeek: 90 }, schedule: 'Матчи: 19:30-21:30', lat: 53.9047, lng: 27.5169, verified: false },
-            { id: 'min_3', name: 'ТРЦ Минск-Арена', address: 'пр. Победителей', city: 'Минск', country: 'Беларусь', type: 'shopping', typeLabel: 'ТЦ', priceRange: '15-30 BYN', avgFare: 22, intensity: 7, alpha: 77, demandReason: { primary: 'Крупный ТЦ', secondary: 'Покупатели', peakTime: '20:00-22:00', tips: 'Семьи' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+70%' }], competition: { taxis: 11, ratio: 3.2 }, history: { successRate: 78, avgWait: 5, tripsWeek: 200 }, schedule: 'Закрытие: 22:00', lat: 53.9042, lng: 27.5203, verified: false },
-            { id: 'min_4', name: 'ЖД Вокзал Минск', address: 'Привокзальная пл., 3', city: 'Минск', country: 'Беларусь', type: 'railway', typeLabel: 'ЖД', priceRange: '15-30 BYN', avgFare: 22, intensity: 8, alpha: 80, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 16, ratio: 2.8 }, history: { successRate: 82, avgWait: 5, tripsWeek: 220 }, schedule: 'Пик: 18:00-22:00', lat: 53.8931, lng: 27.5514, verified: false },
-            { id: 'min_5', name: 'Троицкое предместье', address: 'Троицкое предместье', city: 'Минск', country: 'Беларусь', type: 'tourist', typeLabel: 'Туризм', priceRange: '12-25 BYN', avgFare: 18, intensity: 7, alpha: 76, demandReason: { primary: 'Исторический район', secondary: 'Туристы', peakTime: '20:00-22:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Туризм', impact: '+70%' }], competition: { taxis: 10, ratio: 3.3 }, history: { successRate: 79, avgWait: 4, tripsWeek: 190 }, schedule: 'Пик: 20:00-22:00', lat: 53.9092, lng: 27.5578, verified: false },
-
-            // Алматы (5)
-            { id: 'alm_1', name: 'Аэропорт Алматы', address: 'Алматы, аэропорт', city: 'Алматы', country: 'Казахстан', type: 'airport', typeLabel: 'Аэропорт', priceRange: '5000-10000 KZT', avgFare: 7500, intensity: 9, alpha: 86, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+85%' }], competition: { taxis: 22, ratio: 2.5 }, history: { successRate: 88, avgWait: 7, tripsWeek: 380 }, schedule: 'Пик: 20:00-23:00', lat: 43.3521, lng: 77.0421, verified: false },
-            { id: 'alm_2', name: 'Алматы Арена', address: 'Абая, 140А', city: 'Алматы', country: 'Казахстан', type: 'stadium', typeLabel: 'Стадион', priceRange: '3000-7000 KZT', avgFare: 4500, intensity: 8, alpha: 83, demandReason: { primary: 'Спортивные события', secondary: 'Болельщики', peakTime: '21:30-23:00', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Матч', impact: '+80%' }], competition: { taxis: 15, ratio: 3.0 }, history: { successRate: 85, avgWait: 6, tripsWeek: 85 }, schedule: 'Матчи: 19:30-21:30', lat: 43.2389, lng: 76.9456, verified: false },
-            { id: 'alm_3', name: 'Mega Center', address: 'Розыбакиева, 247А', city: 'Алматы', country: 'Казахстан', type: 'shopping', typeLabel: 'ТЦ', priceRange: '2000-5000 KZT', avgFare: 3500, intensity: 8, alpha: 78, demandReason: { primary: 'Крупный ТЦ', secondary: 'Покупатели', peakTime: '21:00-23:00', tips: 'Семьи' }, dynamicFactors: [{ factor: 'ТЦ', impact: '+75%' }], competition: { taxis: 13, ratio: 3.0 }, history: { successRate: 80, avgWait: 5, tripsWeek: 220 }, schedule: 'Закрытие: 22:00', lat: 43.2386, lng: 76.9239, verified: false },
-            { id: 'alm_4', name: 'ЖД Вокзал Алматы-2', address: 'Абылай хана, 1', city: 'Алматы', country: 'Казахстан', type: 'railway', typeLabel: 'ЖД', priceRange: '2000-4000 KZT', avgFare: 3000, intensity: 7, alpha: 77, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+70%' }], competition: { taxis: 15, ratio: 2.8 }, history: { successRate: 79, avgWait: 5, tripsWeek: 200 }, schedule: 'Пик: 18:00-22:00', lat: 43.2533, lng: 76.9467, verified: false },
-            { id: 'alm_5', name: 'Зелёный базар', address: 'Жибек Жолы, 53', city: 'Алматы', country: 'Казахстан', type: 'tourist', typeLabel: 'Туризм', priceRange: '1500-3000 KZT', avgFare: 2200, intensity: 7, alpha: 75, demandReason: { primary: 'Традиционный базар', secondary: 'Туристы', peakTime: '18:00-20:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Туризм', impact: '+70%' }], competition: { taxis: 12, ratio: 3.0 }, history: { successRate: 77, avgWait: 5, tripsWeek: 170 }, schedule: 'Пик: 18:00-20:00', lat: 43.2531, lng: 76.9514, verified: false },
-
-            // Ташкент (3)
-            { id: 'tsh_1', name: 'Аэропорт Ташкент', address: 'Ташкент', city: 'Ташкент', country: 'Узбекистан', type: 'airport', typeLabel: 'Аэропорт', priceRange: '40000-80000 UZS', avgFare: 60000, intensity: 8, alpha: 84, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '19:00-22:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+80%' }], competition: { taxis: 20, ratio: 2.7 }, history: { successRate: 86, avgWait: 6, tripsWeek: 320 }, schedule: 'Пик: 19:00-22:00', lat: 41.2574, lng: 69.2818, verified: false },
-            { id: 'tsh_2', name: 'Хумо Арена', address: 'пр. Бунёдкор, 7', city: 'Ташкент', country: 'Узбекистан', type: 'stadium', typeLabel: 'Стадион', priceRange: '25000-60000 UZS', avgFare: 42000, intensity: 8, alpha: 82, demandReason: { primary: 'Хоккей и концерты', secondary: 'Болельщики', peakTime: '21:30-23:00', tips: 'Групповые' }, dynamicFactors: [{ factor: 'Арена', impact: '+80%' }], competition: { taxis: 14, ratio: 3.0 }, history: { successRate: 84, avgWait: 6, tripsWeek: 85 }, schedule: 'Пик: 21:30-23:00', lat: 41.3003, lng: 69.2297, verified: false },
-            { id: 'tsh_3', name: 'ЖД Вокзал Ташкент', address: 'Туркестанская, 7', city: 'Ташкент', country: 'Узбекистан', type: 'railway', typeLabel: 'ЖД', priceRange: '20000-40000 UZS', avgFare: 30000, intensity: 8, alpha: 80, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+75%' }], competition: { taxis: 16, ratio: 2.8 }, history: { successRate: 82, avgWait: 5, tripsWeek: 240 }, schedule: 'Пик: 18:00-22:00', lat: 41.3258, lng: 69.2758, verified: false },
-
-            // Ереван (3)
-            { id: 'evn_1', name: 'Аэропорт Звартноц', address: 'Ереван', city: 'Ереван', country: 'Армения', type: 'airport', typeLabel: 'Аэропорт', priceRange: '5000-12000 AMD', avgFare: 8500, intensity: 8, alpha: 85, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+80%' }], competition: { taxis: 18, ratio: 2.8 }, history: { successRate: 87, avgWait: 6, tripsWeek: 290 }, schedule: 'Пик: 20:00-23:00', lat: 40.1474, lng: 44.3953, verified: false },
-            { id: 'evn_2', name: 'Площадь Республики', address: 'Площадь Республики', city: 'Ереван', country: 'Армения', type: 'tourist', typeLabel: 'Туризм', priceRange: '2000-4000 AMD', avgFare: 3000, intensity: 8, alpha: 80, demandReason: { primary: 'Главная площадь', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Площадь', impact: '+80%' }], competition: { taxis: 13, ratio: 3.0 }, history: { successRate: 82, avgWait: 4, tripsWeek: 320 }, schedule: 'Пик: 20:00-23:00', lat: 40.1792, lng: 44.5139, verified: false },
-            { id: 'evn_3', name: 'ЖД Вокзал Ереван', address: 'Сасунци Давид, 1', city: 'Ереван', country: 'Армения', type: 'railway', typeLabel: 'ЖД', priceRange: '1500-3500 AMD', avgFare: 2500, intensity: 7, alpha: 76, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+70%' }], competition: { taxis: 12, ratio: 2.8 }, history: { successRate: 79, avgWait: 5, tripsWeek: 170 }, schedule: 'Пик: 18:00-22:00', lat: 40.1558, lng: 44.5128, verified: false },
-
-            // Тбилиси (3)
-            { id: 'tbs_1', name: 'Аэропорт Тбилиси', address: 'Тбилиси', city: 'Тбилиси', country: 'Грузия', type: 'airport', typeLabel: 'Аэропорт', priceRange: '25-50 GEL', avgFare: 35, intensity: 8, alpha: 85, demandReason: { primary: 'Международный аэропорт', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Длинные' }, dynamicFactors: [{ factor: 'Аэропорт', impact: '+80%' }], competition: { taxis: 20, ratio: 2.6 }, history: { successRate: 87, avgWait: 6, tripsWeek: 310 }, schedule: 'Пик: 20:00-23:00', lat: 41.6692, lng: 44.9547, verified: false },
-            { id: 'tbs_2', name: 'Старый город', address: 'Старый Тбилиси', city: 'Тбилиси', country: 'Грузия', type: 'tourist', typeLabel: 'Туризм', priceRange: '15-30 GEL', avgFare: 22, intensity: 8, alpha: 82, demandReason: { primary: 'Исторический центр', secondary: 'Туристы', peakTime: '20:00-23:00', tips: 'Туристы' }, dynamicFactors: [{ factor: 'Туризм', impact: '+80%' }], competition: { taxis: 14, ratio: 3.0 }, history: { successRate: 83, avgWait: 4, tripsWeek: 360 }, schedule: 'Пик: 20:00-23:00', lat: 41.6934, lng: 44.8097, verified: false },
-            { id: 'tbs_3', name: 'ЖД Вокзал Тбилиси', address: 'Чавчавадзе, 2', city: 'Тбилиси', country: 'Грузия', type: 'railway', typeLabel: 'ЖД', priceRange: '10-25 GEL', avgFare: 17, intensity: 7, alpha: 77, demandReason: { primary: 'Прибытие поездов', secondary: 'Пассажиры', peakTime: '18:00-22:00', tips: 'Средние' }, dynamicFactors: [{ factor: 'Вокзал', impact: '+70%' }], competition: { taxis: 14, ratio: 2.8 }, history: { successRate: 79, avgWait: 5, tripsWeek: 210 }, schedule: 'Пик: 18:00-22:00', lat: 41.7186, lng: 44.7958, verified: false }
-        ];
+        const masterEventsDB = window.TAXI_RADAR_EVENTS || []; // база вынесена в data.js (Этап 3)
 
         // ============================================
         // УТИЛИТЫ
@@ -2055,13 +2178,13 @@
             }, 4000);
         }
 
-        function saveStats() {
-            try { localStorage.setItem('trp_stats', JSON.stringify(userStats)); } catch (e) {}
+        async function saveStats() {
+            try { await idbSet('trp_stats', app.state.userStats); } catch (e) {}
         }
 
         function showAchievement(icon, title, desc) {
-            if (userStats.achievements.includes(title)) return;
-            userStats.achievements.push(title);
+            if (app.state.userStats.achievements.includes(title)) return;
+            app.state.userStats.achievements.push(title);
             saveStats();
             
             const popup = document.getElementById('achievement-popup');
@@ -2074,7 +2197,7 @@
         }
 
         function setLanguage(lang) {
-            currentLanguage = lang;
+            app.state.currentLanguage = lang;
             localStorage.setItem('trp_language', lang);
             document.documentElement.lang = lang;
             
@@ -2086,47 +2209,91 @@
             showNotification(`Язык: ${lang.toUpperCase()}`, 'ph-globe');
         }
 
-        async function validateCoordinates(address, eventName, currentLat, currentLng, country = 'Россия') {
+        // --- Геолокация: кэширование координат в localStorage ---
+        const GEO_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 дней
+        const GEO_CONCURRENCY = 2;                       // макс. одновременных запросов к Nominatim
+
+        async function readGeoCache(eventId) {
+            if (!eventId) return null;
             try {
-                await new Promise(r => setTimeout(r, 1100));
-                const fullAddress = `${address}, ${country}`;
+                const cached = await idbGet(`trp_geo_${eventId}`);
+                if (!cached || typeof cached.timestamp !== 'number') return null;
+                if (Date.now() - cached.timestamp > GEO_CACHE_TTL) {
+                    await idbDel(`trp_geo_${eventId}`); // устарело
+                    return null;
+                }
+                return cached;
+            } catch (e) { return null; }
+        }
+
+        async function writeGeoCache(eventId, data) {
+            if (!eventId) return;
+            try {
+                await idbSet(`trp_geo_${eventId}`, data);
+            } catch (e) { console.warn('Geo cache write failed:', e); }
+        }
+
+        async function validateCoordinates(event) {
+            const currentLat = event.lat;
+            const currentLng = event.lng;
+
+            // 1. Проверяем локальный кэш (IndexedDB) — если есть свежие данные, возвращаем мгновенно
+            const cached = await readGeoCache(event.id);
+            if (cached) {
+                const distance = getDistance(currentLat, currentLng, cached.lat, cached.lng);
+                return { lat: cached.lat, lng: cached.lng, verified: true, corrected: distance > 0.2, accuracy: cached.accuracy, fromCache: true };
+            }
+
+            // 2. Кэша нет — идём в сеть
+            try {
+                const fullAddress = `${event.address}, ${event.country || 'Россия'}`;
                 const response = await fetch(
                     `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=3&accept-language=ru`,
                     { headers: { 'User-Agent': 'TaxiRadarPro/5.0' } }
                 );
                 const data = await response.json();
-                
+
                 if (data && data.length > 0) {
                     const best = data.sort((a, b) => {
-                        const nameMatchA = a.display_name.toLowerCase().includes(eventName.toLowerCase()) ? 1 : 0;
-                        const nameMatchB = b.display_name.toLowerCase().includes(eventName.toLowerCase()) ? 1 : 0;
+                        const nameMatchA = a.display_name.toLowerCase().includes(event.name.toLowerCase()) ? 1 : 0;
+                        const nameMatchB = b.display_name.toLowerCase().includes(event.name.toLowerCase()) ? 1 : 0;
                         return nameMatchB - nameMatchA || (b.importance || 0) - (a.importance || 0);
                     })[0];
-                    
+
                     const newLat = parseFloat(best.lat);
                     const newLng = parseFloat(best.lon);
                     const distance = getDistance(currentLat, currentLng, newLat, newLng);
-                    
-                    return { lat: newLat, lng: newLng, verified: true, corrected: distance > 0.2, accuracy: best.importance > 0.6 ? 'exact' : 'approximate' };
+                    const accuracy = best.importance > 0.6 ? 'exact' : 'approximate';
+
+                    // 3. Сохраняем подтверждённые координаты в IndexedDB
+                    await writeGeoCache(event.id, { lat: newLat, lng: newLng, accuracy, timestamp: Date.now() });
+
+                    return { lat: newLat, lng: newLng, verified: true, corrected: distance > 0.2, accuracy, fromCache: false };
                 }
-            } catch (e) { console.warn(`Geocoding failed for ${eventName}:`, e); }
-            return { lat: currentLat, lng: currentLng, verified: false, corrected: false };
+            } catch (e) { console.warn(`Geocoding failed for ${event.name}:`, e); }
+            return { lat: currentLat, lng: currentLng, verified: false, corrected: false, fromCache: false };
         }
 
         async function validateAllCoordinates(events) {
             const progressContainer = document.getElementById('verification-progress');
             const progressFill = document.getElementById('progress-fill');
             const progressText = document.getElementById('progress-text');
-            
+
             progressContainer.classList.add('active');
-            
-            let corrected = 0;
-            let verified = 0;
-            
-            for (let i = 0; i < events.length; i++) {
-                const event = events[i];
-                const result = await validateCoordinates(event.address, event.name, event.lat, event.lng, event.country);
-                
+
+            const total = events.length;
+            let corrected = 0, verified = 0, cachedCount = 0, done = 0;
+
+            const updateProgress = () => {
+                const progress = total ? (done / total) * 100 : 100;
+                progressFill.style.width = `${progress}%`;
+                progressText.textContent = `Проверка: ${done}/${total} • ✅ ${verified} • 🔧 ${corrected} • ⚡ ${cachedCount}`;
+            };
+            updateProgress();
+
+            // Обработка одного события + обновление прогресса (общая для кэша и сети)
+            const process = async (event) => {
+                const result = await validateCoordinates(event);
                 if (result.verified) {
                     if (result.corrected) {
                         event.lat = result.lat;
@@ -2137,39 +2304,70 @@
                     event.verified = true;
                     event.accuracy = result.accuracy;
                     verified++;
+                    if (result.fromCache) cachedCount++;
                 }
-                
-                const progress = ((i + 1) / events.length) * 100;
-                progressFill.style.width = `${progress}%`;
-                progressText.textContent = `Проверка: ${i + 1}/${events.length} • ✅ ${verified} • 🔧 ${corrected}`;
-            }
-            
+                done++;
+                updateProgress();
+            };
+
+            // Умная очередь: не более GEO_CONCURRENCY запросов одновременно.
+            // Кэшированные события проходят мгновенно, сетевые — по 2 параллельно.
+            let cursor = 0;
+            const worker = async () => {
+                while (cursor < total) {
+                    const event = events[cursor++];
+                    await process(event);
+                }
+            };
+            const pool = [];
+            for (let w = 0; w < Math.min(GEO_CONCURRENCY, total); w++) pool.push(worker());
+            await Promise.all(pool);
+
             setTimeout(() => progressContainer.classList.remove('active'), 2000);
-            showNotification(`✅ Проверено: ${verified}/${events.length} • Исправлено: ${corrected}`, 'ph-check-circle');
-            
-            if (verified >= events.length * 0.8 && !userStats.achievements.includes('Точный стрелок')) {
+            showNotification(`✅ Проверено: ${verified}/${total} • Исправлено: ${corrected} • ⚡ Из кэша: ${cachedCount}`, 'ph-check-circle');
+
+            if (total > 0 && verified >= total * 0.8 && !app.state.userStats.achievements.includes('Точный стрелок')) {
                 showAchievement('🎯', 'Точный стрелок', '80%+ координат проверено');
             }
+        }
+
+        // Применяет данные о погоде к state + DOM. stale=true — данные из офлайн-кэша.
+        function applyWeather(current, stale = false) {
+            app.state.weatherData.temp = Math.round(current.temperature_2m);
+            const code = current.weather_code;
+            const iconEl = document.getElementById('weather-icon');
+
+            if (code >= 51 && code <= 67) { app.state.weatherData.condition = 'Дождь'; app.state.weatherData.isRain = true; app.state.weatherData.impact = 40; iconEl.className = 'ph-fill ph-cloud-rain'; }
+            else if (code >= 71 && code <= 77) { app.state.weatherData.condition = 'Снег'; app.state.weatherData.isRain = true; app.state.weatherData.impact = 50; iconEl.className = 'ph-fill ph-snowflake'; }
+            else if (code === 0 || code === 1) { app.state.weatherData.condition = 'Ясно'; app.state.weatherData.isRain = false; app.state.weatherData.impact = 0; iconEl.className = 'ph-fill ph-sun'; }
+            else { app.state.weatherData.condition = 'Пасмурно'; app.state.weatherData.isRain = false; app.state.weatherData.impact = 15; iconEl.className = 'ph-fill ph-cloud'; }
+
+            const textEl = document.getElementById('weather-text');
+            textEl.innerText = `${app.state.weatherData.temp > 0 ? '+' : ''}${app.state.weatherData.temp}°C${stale ? ' ⚑' : ''}`;
+            textEl.title = stale ? 'Погода из кэша (нет сети)' : '';
+            document.getElementById('weather-impact').innerText = app.state.weatherData.impact > 0 ? `+${app.state.weatherData.impact}%` : '—';
         }
 
         async function fetchWeather(lat, lng) {
             try {
                 const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`);
                 const data = await res.json();
-                
+
                 if (data && data.current) {
-                    weatherData.temp = Math.round(data.current.temperature_2m);
-                    const code = data.current.weather_code;
-                    
-                    if (code >= 51 && code <= 67) { weatherData.condition = 'Дождь'; weatherData.isRain = true; weatherData.impact = 40; document.getElementById('weather-icon').className = 'ph-fill ph-cloud-rain'; }
-                    else if (code >= 71 && code <= 77) { weatherData.condition = 'Снег'; weatherData.isRain = true; weatherData.impact = 50; document.getElementById('weather-icon').className = 'ph-fill ph-snowflake'; }
-                    else if (code === 0 || code === 1) { weatherData.condition = 'Ясно'; weatherData.impact = 0; document.getElementById('weather-icon').className = 'ph-fill ph-sun'; }
-                    else { weatherData.condition = 'Пасмурно'; weatherData.impact = 15; document.getElementById('weather-icon').className = 'ph-fill ph-cloud'; }
-                    
-                    document.getElementById('weather-text').innerText = `${weatherData.temp > 0 ? '+' : ''}${weatherData.temp}°C`;
-                    document.getElementById('weather-impact').innerText = weatherData.impact > 0 ? `+${weatherData.impact}%` : '—';
+                    applyWeather(data.current, false);
+                    // Кэшируем последнюю погоду в IndexedDB для офлайн-режима
+                    await idbSet('trp_weather', { current: data.current, lat, lng, timestamp: Date.now() });
+                    return;
                 }
-            } catch(e) { console.warn('Weather fetch failed:', e); }
+            } catch (e) {
+                console.warn('Weather fetch failed, пробуем кэш IndexedDB:', e);
+            }
+
+            // Офлайн / ошибка сети — показываем последнюю известную погоду из кэша
+            try {
+                const cached = await idbGet('trp_weather');
+                if (cached && cached.current) applyWeather(cached.current, true);
+            } catch (_) {}
         }
 
         async function detectCityFromGPS(lat, lng) {
@@ -2177,8 +2375,8 @@
                 const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=ru`);
                 const data = await response.json();
                 if (data && data.address) {
-                    cityName = data.address.city || data.address.town || data.address.state || 'Москва';
-                    currentCountry = data.address.country || 'Россия';
+                    app.state.cityName = data.address.city || data.address.town || data.address.state || 'Москва';
+                    app.state.currentCountry = data.address.country || 'Россия';
                 }
             } catch (e) { console.warn('Не удалось определить город:', e); }
         }
@@ -2190,45 +2388,66 @@
             startScreen.style.visibility = 'hidden';
             setTimeout(() => startScreen.style.display = 'none', 1000);
             
-            localEvents = masterEventsDB
-                .filter(e => e.city === cityName || cityName.includes(e.city))
-                .map(e => ({ ...e, distance: getDistance(baseLat, baseLng, e.lat, e.lng) }))
+            let zones = masterEventsDB
+                .filter(e => e.city === app.state.cityName || app.state.cityName.includes(e.city))
+                .map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) }))
                 .sort((a, b) => b.alpha - a.alpha);
-            
-            if (localEvents.length < 3) {
-                localEvents = masterEventsDB.map(e => ({ ...e, distance: getDistance(baseLat, baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha).slice(0, 15);
+
+            if (zones.length < 3) {
+                zones = masterEventsDB.map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha).slice(0, 15);
             }
-            
-            document.getElementById('header-city').textContent = cityName;
+
+            // Публикуем данные -> подписчики (renderEventsList + updateStats) реагируют сами
+            app.setLocalEvents(zones);
+            document.getElementById('header-city').textContent = app.state.cityName;
             
             setTimeout(() => {
                 initMap();
-                startLoadingRadar();
+                startLoadingRadar().then(loadDynamicEvents); // после загрузки радара подмешиваем динамику (Этап 5)
                 document.getElementById('top-left-panel').classList.remove('hide-top');
                 document.getElementById('top-right-panel').classList.remove('hide-top');
                 document.getElementById('fab-actions').classList.remove('opacity-0');
                 document.getElementById('radar-widget').classList.remove('opacity-0');
                 startTracking();
                 
-                if (autoRefreshEnabled) autoRefreshInterval = setInterval(manualRefresh, 15 * 60 * 1000);
+                if (app.state.autoRefreshEnabled) autoRefreshInterval = setInterval(manualRefresh, 15 * 60 * 1000);
                 aiScanInterval = setInterval(runAIScanner, 30000);
-                crowdFlowInterval = setInterval(() => { if (crowdFlowEnabled) renderCrowdFlow(); }, 30000);
+                crowdFlowInterval = setInterval(() => { if (app.state.crowdFlowEnabled) renderCrowdFlow(); }, 30000);
                 
                 setTimeout(runAIScanner, 5000);
                 setTimeout(() => playVoiceBriefing(), 3000);
                 
-                showNotification(`✅ Загружено ${localEvents.length} зон в ${cityName}`, 'ph-check-circle');
-                userStats.totalTrips++;
+                showNotification(`✅ Загружено ${app.state.localEvents.length} зон в ${app.state.cityName}`, 'ph-check-circle');
+                app.state.userStats.totalTrips++;
                 saveStats();
                 
-                if (userStats.totalTrips === 1) showAchievement('🚀', 'Первый запуск', 'Приложение запущено впервые');
+                if (app.state.userStats.totalTrips === 1) showAchievement('🚀', 'Первый запуск', 'Приложение запущено впервые');
             }, 600);
         }
 
         function initMap() {
             if (map) return;
-            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([baseLat, baseLng], 12);
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([app.state.baseLat, app.state.baseLng], 12);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+
+            // Кластеризация 90+ зон — снимает лаги рендера при большом кол-ве маркеров
+            clusterGroup = L.markerClusterGroup({
+                showCoverageOnHover: false,
+                spiderfyOnMaxZoom: true,
+                disableClusteringAtZoom: 16,
+                maxClusterRadius: 60,
+                iconCreateFunction: function (cluster) {
+                    const count = cluster.getChildCount();
+                    const size = count < 10 ? 42 : count < 30 ? 54 : 66;
+                    return L.divIcon({
+                        html: `<div class="trp-cluster glass"><span>${count}</span></div>`,
+                        className: 'trp-cluster-wrapper',
+                        iconSize: L.point(size, size)
+                    });
+                }
+            });
+            map.addLayer(clusterGroup);
+
             map.invalidateSize();
         }
 
@@ -2236,11 +2455,11 @@
             const overlay = document.getElementById('loading-radar-overlay');
             overlay.classList.add('active');
             const counter = document.getElementById('loading-counter-text');
-            const total = localEvents.length;
+            const total = app.state.localEvents.length;
             
             for (let i = 0; i < total; i++) {
                 await new Promise(r => setTimeout(r, 250));
-                const event = localEvents[i];
+                const event = app.state.localEvents[i];
                 createMarker(event);
                 counter.innerText = `${i + 1}/${total}`;
                 playBeep();
@@ -2249,25 +2468,19 @@
             await new Promise(r => setTimeout(r, 1200));
             overlay.classList.remove('active');
             showBottomSheet();
-            renderEventsList();
-            updateStats();
+            // renderEventsList/updateStats вызываются через подписку на 'data:updated' (см. launchApp -> app.setLocalEvents)
             setTimeout(() => showTopRecommendation(), 1500);
         }
 
-        function createMarker(event) {
-            if (!map) return;
-            const radius = (event.alpha / 10) * 50;
-            const circle = L.circle([event.lat, event.lng], {
-                color: '#C026D3', fillColor: '#C026D3', fillOpacity: 0.2, weight: 2, radius: radius, className: 'demand-zone'
-            }).addTo(map);
-            
-            const verifiedBadge = event.verified 
+        // Ленивая генерация тяжёлого HTML попапа — вызывается только при открытии
+        function buildPopupHtml(event) {
+            const verifiedBadge = event.verified
                 ? `<span class="verified-badge verified"><i class="ph-fill ph-check-circle"></i></span>`
                 : `<span class="verified-badge unverified"><i class="ph-fill ph-warning"></i></span>`;
-            
+
             const timeline = generateTimeline(event);
-            
-            const popupHtml = `
+
+            return `
                 <div style="font-size: 0.85rem;">
                     <div style="margin-bottom: 10px;">
                         <div style="font-size: 0.73rem; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
@@ -2298,10 +2511,27 @@
                     </div>
                 </div>
             `;
-            
-            circle.bindPopup(popupHtml, { maxWidth: 380 });
-            circle.on('click', () => map.flyTo([event.lat, event.lng], 14, { duration: 0.8 }));
-            mapMarkers[event.id] = circle;
+        }
+
+        function createMarker(event) {
+            if (!clusterGroup) return;
+
+            // Размер точки масштабируется по спросу (alpha), как раньше делал радиус круга
+            const size = Math.round(16 + (event.alpha / 100) * 28); // 16–44px
+            const icon = L.divIcon({
+                html: `<div class="demand-zone-dot"></div>`,
+                className: 'demand-zone-marker',
+                iconSize: L.point(size, size),
+                iconAnchor: L.point(size / 2, size / 2)
+            });
+
+            const marker = L.marker([event.lat, event.lng], { icon });
+
+            // Lazy rendering: функция-контент вызывается Leaflet только в момент открытия попапа
+            marker.bindPopup(() => buildPopupHtml(event), { maxWidth: 380 });
+
+            clusterGroup.addLayer(marker);
+            mapMarkers[event.id] = marker;
         }
 
         function generateTimeline(event) {
@@ -2330,17 +2560,26 @@
         }
 
         function focusOnEvent(eventId) {
-            const event = localEvents.find(e => e.id === eventId);
-            if (event && map) {
+            const event = app.state.localEvents.find(e => e.id === eventId);
+            if (!event || !map) return;
+            const marker = mapMarkers[eventId];
+
+            // Раскрываем кластер (если маркер внутри него), затем открываем попап
+            if (marker && clusterGroup) {
+                clusterGroup.zoomToShowLayer(marker, () => {
+                    map.flyTo([event.lat, event.lng], 16, { duration: 0.8 });
+                    setTimeout(() => marker.openPopup(), 850);
+                });
+            } else {
                 map.flyTo([event.lat, event.lng], 16, { duration: 0.8 });
-                setTimeout(() => { if (mapMarkers[eventId]) mapMarkers[eventId].openPopup(); }, 800);
+                setTimeout(() => { if (marker) marker.openPopup(); }, 850);
             }
         }
 
         function renderEventsList(filter = 'all') {
             const list = document.getElementById('events-list');
             list.innerHTML = '';
-            let filtered = [...localEvents];
+            let filtered = [...app.state.localEvents];
             if (filter === 'hot') filtered = filtered.filter(e => e.alpha >= 85);
             else if (filter === 'near') filtered = filtered.filter(e => e.distance < 5).sort((a, b) => a.distance - b.distance);
             
@@ -2396,9 +2635,9 @@
         }
 
         function showTopRecommendation() {
-            if (localEvents.length === 0) return;
-            const best = localEvents.map(e => ({ ...e, optimality: (e.alpha * e.competition.ratio) / (e.distance * 0.3 + e.history.avgWait * 0.7) })).sort((a, b) => b.optimality - a.optimality)[0];
-            recommendedPoint = best;
+            if (app.state.localEvents.length === 0) return;
+            const best = app.state.localEvents.map(e => ({ ...e, optimality: (e.alpha * e.competition.ratio) / (e.distance * 0.3 + e.history.avgWait * 0.7) })).sort((a, b) => b.optimality - a.optimality)[0];
+            app.state.recommendedPoint = best;
             document.getElementById('rec-title').innerText = best.name;
             document.getElementById('rec-reason').innerText = best.demandReason.primary;
             document.getElementById('rec-stats').innerHTML = `<span>📍 ${best.distance.toFixed(1)} км</span><span>⏱ ${best.history.avgWait} мин</span><span>💰 ${best.priceRange}</span><span>📈 α ${best.alpha}</span>`;
@@ -2407,11 +2646,11 @@
         }
 
         function goToRecommended() {
-            if (recommendedPoint) {
-                window.open(`https://yandex.ru/maps/?rtext=~${recommendedPoint.lat},${recommendedPoint.lng}&rtt=auto`, '_blank');
+            if (app.state.recommendedPoint) {
+                window.open(`https://yandex.ru/maps/?rtext=~${app.state.recommendedPoint.lat},${app.state.recommendedPoint.lng}&rtt=auto`, '_blank');
                 document.getElementById('top-recommendation').classList.remove('active');
-                userStats.hotZonesVisited++;
-                if (userStats.hotZonesVisited >= 10 && !userStats.achievements.includes('Горячий охотник')) showAchievement('🔥', 'Горячий охотник', 'Посещено 10 горячих зон');
+                app.state.userStats.hotZonesVisited++;
+                if (app.state.userStats.hotZonesVisited >= 10 && !app.state.userStats.achievements.includes('Горячий охотник')) showAchievement('🔥', 'Горячий охотник', 'Посещено 10 горячих зон');
                 saveStats();
             }
         }
@@ -2439,44 +2678,45 @@
 
         async function selectCity(name, lat, lng, country = 'Россия') {
             showNotification(`📍 Загрузка ${name}...`, 'ph-map-pin');
-            cityName = name; baseLat = lat; baseLng = lng; currentCountry = country;
+            app.setCity(name, lat, lng, country); // обновляет state + событие city:changed
             document.getElementById('header-city').textContent = name;
             closeCityModal();
-            
-            Object.values(mapMarkers).forEach(m => map.removeLayer(m));
+
+            if (clusterGroup) clusterGroup.clearLayers();
             mapMarkers = {};
-            
-            localEvents = masterEventsDB.filter(e => e.city === name || name.includes(e.city) || e.city.includes(name)).map(e => ({ ...e, distance: getDistance(baseLat, baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha);
-            if (localEvents.length < 3) localEvents = masterEventsDB.map(e => ({ ...e, distance: getDistance(baseLat, baseLng, e.lat, e.lng) })).sort((a, b) => a.distance - b.distance).slice(0, 15);
-            
-            await validateAllCoordinates(localEvents);
+
+            let zones = masterEventsDB.filter(e => e.city === name || name.includes(e.city) || e.city.includes(name)).map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha);
+            if (zones.length < 3) zones = masterEventsDB.map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) })).sort((a, b) => a.distance - b.distance).slice(0, 15);
+
+            await validateAllCoordinates(zones);
             map.flyTo([lat, lng], 12, { duration: 1.5 });
-            renderEventsList();
-            localEvents.forEach(e => createMarker(e));
-            updateStats();
-            if (heatmapEnabled) renderHeatmap();
-            if (crowdFlowEnabled) renderCrowdFlow();
-            showNotification(`✅ ${name} загружен (${localEvents.length} зон)`, 'ph-check-circle');
+            // Публикуем данные -> подписчики (renderEventsList + updateStats) реагируют сами
+            app.setLocalEvents(zones);
+            zones.forEach(e => createMarker(e));
+            if (app.state.heatmapEnabled) renderHeatmap();
+            if (app.state.crowdFlowEnabled) renderCrowdFlow();
+            showNotification(`✅ ${name} загружен (${app.state.localEvents.length} зон)`, 'ph-check-circle');
+            loadDynamicEvents(); // подмешиваем динамические события нового города (Этап 5)
         }
 
         function toggleHeatmap() {
-            heatmapEnabled = !heatmapEnabled;
-            document.getElementById('setting-heatmap').checked = heatmapEnabled;
-            if (heatmapEnabled) { renderHeatmap(); document.getElementById('btn-heatmap').classList.add('active'); showNotification('🗺️ Тепловая карта включена', 'ph-flame'); }
+            app.state.heatmapEnabled = !app.state.heatmapEnabled;
+            document.getElementById('setting-heatmap').checked = app.state.heatmapEnabled;
+            if (app.state.heatmapEnabled) { renderHeatmap(); document.getElementById('btn-heatmap').classList.add('active'); showNotification('🗺️ Тепловая карта включена', 'ph-flame'); }
             else { if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; } if (window.heatmapLegend) { window.heatmapLegend.remove(); window.heatmapLegend = null; } document.getElementById('btn-heatmap').classList.remove('active'); showNotification('🗺️ Тепловая карта отключена', 'ph-flame'); }
         }
 
         function toggleHeatmapSetting(checked) {
-            heatmapEnabled = checked;
+            app.state.heatmapEnabled = checked;
             if (checked) { renderHeatmap(); document.getElementById('btn-heatmap').classList.add('active'); }
             else { if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; } if (window.heatmapLegend) { window.heatmapLegend.remove(); window.heatmapLegend = null; } document.getElementById('btn-heatmap').classList.remove('active'); }
         }
 
         function renderHeatmap() {
-            if (!map || localEvents.length === 0) return;
+            if (!map || app.state.localEvents.length === 0) return;
             if (heatLayer) map.removeLayer(heatLayer);
-            const heatData = localEvents.map(e => {
-                const weatherImpact = weatherData.isRain ? 1.3 : 1.0;
+            const heatData = app.state.localEvents.map(e => {
+                const weatherImpact = app.state.weatherData.isRain ? 1.3 : 1.0;
                 const timeImpact = getTimeMultiplier(e.type);
                 const weight = (e.alpha / 100) * (e.intensity / 10) * weatherImpact * timeImpact;
                 return [e.lat, e.lng, Math.min(1, weight)];
@@ -2500,9 +2740,9 @@
         function generateAIHotspots() {
             const hotspots = [];
             const gridSize = 0.01;
-            for (let lat = baseLat - 0.1; lat <= baseLat + 0.1; lat += gridSize) {
-                for (let lng = baseLng - 0.1; lng <= baseLng + 0.1; lng += gridSize) {
-                    const pointsInCell = localEvents.filter(e => Math.abs(e.lat - lat) < gridSize && Math.abs(e.lng - lng) < gridSize);
+            for (let lat = app.state.baseLat - 0.1; lat <= app.state.baseLat + 0.1; lat += gridSize) {
+                for (let lng = app.state.baseLng - 0.1; lng <= app.state.baseLng + 0.1; lng += gridSize) {
+                    const pointsInCell = app.state.localEvents.filter(e => Math.abs(e.lat - lat) < gridSize && Math.abs(e.lng - lng) < gridSize);
                     if (pointsInCell.length >= 3) {
                         const avgAlpha = pointsInCell.reduce((sum, p) => sum + p.alpha, 0) / pointsInCell.length;
                         if (avgAlpha > 70) hotspots.push([lat, lng, Math.min(1, avgAlpha / 100)]);
@@ -2531,7 +2771,7 @@
         }
 
         function animateHotZones() {
-            localEvents.filter(e => e.alpha >= 85).forEach(zone => {
+            app.state.localEvents.filter(e => e.alpha >= 85).forEach(zone => {
                 const pulse = L.circle([zone.lat, zone.lng], { radius: 300, color: '#ff0000', fillColor: '#ff0000', fillOpacity: 0, weight: 3, className: 'heatmap-pulse-animation' }).addTo(map);
                 let opacity = 0.6; let radius = 300;
                 const interval = setInterval(() => {
@@ -2543,27 +2783,27 @@
         }
 
         function toggleCrowdFlow() {
-            crowdFlowEnabled = !crowdFlowEnabled;
-            document.getElementById('setting-flows').checked = crowdFlowEnabled;
-            if (crowdFlowEnabled) { renderCrowdFlow(); document.getElementById('btn-crowdflow').classList.add('active'); showNotification('📊 Потоки включены', 'ph-flow-arrow'); }
+            app.state.crowdFlowEnabled = !app.state.crowdFlowEnabled;
+            document.getElementById('setting-flows').checked = app.state.crowdFlowEnabled;
+            if (app.state.crowdFlowEnabled) { renderCrowdFlow(); document.getElementById('btn-crowdflow').classList.add('active'); showNotification('📊 Потоки включены', 'ph-flow-arrow'); }
             else { clearCrowdFlow(); document.getElementById('btn-crowdflow').classList.remove('active'); showNotification('📊 Потоки отключены', 'ph-flow-arrow'); }
         }
 
         function toggleCrowdFlowSetting(checked) {
-            crowdFlowEnabled = checked;
+            app.state.crowdFlowEnabled = checked;
             if (checked) { renderCrowdFlow(); document.getElementById('btn-crowdflow').classList.add('active'); }
             else { clearCrowdFlow(); document.getElementById('btn-crowdflow').classList.remove('active'); }
         }
 
         function renderCrowdFlow() {
-            if (!map || localEvents.length < 2) return;
+            if (!map || app.state.localEvents.length < 2) return;
             clearCrowdFlow();
             const hour = new Date().getHours();
             const dayOfWeek = new Date().getDay();
             const flows = [];
-            const businessZones = localEvents.filter(e => e.type === 'business');
-            const entertainmentZones = localEvents.filter(e => ['nightclub', 'bar', 'restaurant'].includes(e.type));
-            const shoppingZones = localEvents.filter(e => e.type === 'shopping');
+            const businessZones = app.state.localEvents.filter(e => e.type === 'business');
+            const entertainmentZones = app.state.localEvents.filter(e => ['nightclub', 'bar', 'restaurant'].includes(e.type));
+            const shoppingZones = app.state.localEvents.filter(e => e.type === 'shopping');
             
             if (hour >= 7 && hour <= 10 && businessZones.length > 0) {
                 businessZones.slice(0, 3).forEach(biz => {
@@ -2574,7 +2814,7 @@
             
             if (hour >= 12 && hour <= 14 && businessZones.length > 0) {
                 businessZones.slice(0, 3).forEach(office => {
-                    const nearest = localEvents.filter(e => ['restaurant', 'bar'].includes(e.type)).map(r => ({ ...r, dist: getDistance(office.lat, office.lng, r.lat, r.lng) })).filter(r => r.dist < 2).sort((a, b) => a.dist - b.dist)[0];
+                    const nearest = app.state.localEvents.filter(e => ['restaurant', 'bar'].includes(e.type)).map(r => ({ ...r, dist: getDistance(office.lat, office.lng, r.lat, r.lng) })).filter(r => r.dist < 2).sort((a, b) => a.dist - b.dist)[0];
                     if (nearest) flows.push({ from: { lat: office.lat, lng: office.lng }, to: { lat: nearest.lat, lng: nearest.lng }, intensity: 0.65, color: '#ff9900', width: 3, label: '🍽️ Обед' });
                 });
             }
@@ -2601,15 +2841,15 @@
                 });
             }
             
-            const airports = localEvents.filter(e => e.type === 'airport');
-            const railways = localEvents.filter(e => e.type === 'railway');
+            const airports = app.state.localEvents.filter(e => e.type === 'airport');
+            const railways = app.state.localEvents.filter(e => e.type === 'railway');
             [...airports, ...railways].slice(0, 2).forEach(transport => {
-                localEvents.filter(e => !['airport', 'railway'].includes(e.type)).map(e => ({ ...e, dist: getDistance(transport.lat, transport.lng, e.lat, e.lng) })).filter(e => e.dist < 3).sort((a, b) => a.dist - b.dist).slice(0, 2).forEach(point => {
+                app.state.localEvents.filter(e => !['airport', 'railway'].includes(e.type)).map(e => ({ ...e, dist: getDistance(transport.lat, transport.lng, e.lat, e.lng) })).filter(e => e.dist < 3).sort((a, b) => a.dist - b.dist).slice(0, 2).forEach(point => {
                     flows.push({ from: { lat: transport.lat, lng: transport.lng }, to: { lat: point.lat, lng: point.lng }, intensity: 0.72, color: '#00cc66', width: 3, label: '🚉 Транспорт' });
                 });
             });
             
-            if (weatherData.isRain && shoppingZones.length > 0) {
+            if (app.state.weatherData.isRain && shoppingZones.length > 0) {
                 shoppingZones.slice(0, 2).forEach(mall => {
                     flows.push({ from: { lat: mall.lat - 0.08, lng: mall.lng - 0.08 }, to: { lat: mall.lat, lng: mall.lng }, intensity: 0.95, color: '#0099ff', width: 5, label: '🌧️ Дождь' });
                 });
@@ -2648,24 +2888,108 @@
             if (panel.classList.contains('active')) runAIScanner();
         }
 
+        // Детерминированный PRNG: стабильное число [0,1) из строкового сида (FNV-1a) — Этап 5
+        function deterministicRandom(seed) {
+            const str = String(seed);
+            let h = 2166136261; // FNV-1a offset basis
+            for (let i = 0; i < str.length; i++) {
+                h ^= str.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return (h >>> 0) / 4294967296; // нормализация в [0, 1)
+        }
+
+        // Заглушка внешнего API "события сегодня". В реальности здесь был бы fetch к бэкенду.
+        // Возвращает 1-2 динамических "горячих" события с задержкой 800мс. Детерминированно на день.
+        async function fetchDynamicEvents(city) {
+            await new Promise(r => setTimeout(r, 800));
+
+            const now = new Date();
+            const daySeed = `${city}_${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+            const templates = [
+                { key: 'concert', name: '🎤 Концерт сегодня',      type: 'nightclub',   typeLabel: 'Концерт',   primary: 'Крупный концерт — массовый разъезд после финала', peakTime: '22:30-00:30', tips: 'Пик сразу после последней песни', factor: 'Концерт',   impact: '+130%', baseAlpha: 92, avgFare: 1800 },
+                { key: 'rally',   name: '📣 Митинг в центре',       type: 'attraction',  typeLabel: 'Событие',   primary: 'Внезапное массовое мероприятие в центре',          peakTime: '18:00-20:00', tips: 'Много коротких поездок из центра', factor: 'Митинг',    impact: '+110%', baseAlpha: 88, avgFare: 900 },
+                { key: 'fest',    name: '🎪 Городской фестиваль',    type: 'tourist',     typeLabel: 'Фестиваль', primary: 'Уличный фестиваль — толпы туристов весь вечер',    peakTime: '21:00-23:00', tips: 'Стабильный спрос весь вечер',      factor: 'Фестиваль', impact: '+100%', baseAlpha: 85, avgFare: 1200 }
+            ];
+
+            const count = 1 + Math.round(deterministicRandom(daySeed + '_count')); // 1 или 2
+            const events = [];
+            for (let i = 0; i < count; i++) {
+                const t = templates[Math.floor(deterministicRandom(daySeed + '_pick' + i) * templates.length)];
+                const dLat = (deterministicRandom(daySeed + '_lat' + i) - 0.5) * 0.08; // смещение ~±4км
+                const dLng = (deterministicRandom(daySeed + '_lng' + i) - 0.5) * 0.08;
+                events.push({
+                    id: `dyn_${t.key}_${i}`,
+                    name: t.name,
+                    address: `${app.state.cityName}, центр`,
+                    city: app.state.cityName,
+                    country: app.state.currentCountry,
+                    type: t.type,
+                    typeLabel: t.typeLabel,
+                    priceRange: '—',
+                    avgFare: t.avgFare,
+                    intensity: 10,
+                    alpha: t.baseAlpha,
+                    demandReason: { primary: t.primary, secondary: 'Динамическое событие', peakTime: t.peakTime, tips: t.tips },
+                    dynamicFactors: [{ factor: t.factor, impact: t.impact }],
+                    competition: { taxis: 12, ratio: 4.0 },
+                    history: { successRate: 90, avgWait: 4, tripsWeek: 0 },
+                    schedule: `Сегодня • ${t.peakTime}`,
+                    lat: app.state.baseLat + dLat,
+                    lng: app.state.baseLng + dLng,
+                    verified: true,
+                    isDynamic: true
+                });
+            }
+            return events;
+        }
+
+        // Мердж статической базы и динамических событий: дедуп по id, пересчёт alpha/расстояния (Этап 5)
+        async function loadDynamicEvents() {
+            try {
+                const dynamic = await fetchDynamicEvents(app.state.cityName);
+                if (!dynamic || !dynamic.length) return;
+
+                const existingIds = new Set(app.state.localEvents.map(e => e.id));
+                const fresh = dynamic
+                    .filter(e => !existingIds.has(e.id))
+                    .map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng), alpha: recalculateAlpha(e) }));
+                if (!fresh.length) return;
+
+                const merged = [...app.state.localEvents, ...fresh].sort((a, b) => b.alpha - a.alpha);
+                app.setLocalEvents(merged);       // -> data:updated -> re-render списка + статистики
+                fresh.forEach(createMarker);      // добавляем маркеры динамических зон в кластер
+                showNotification(`⚡ +${fresh.length} динамич. ${fresh.length === 1 ? 'событие' : 'события'} сегодня`, 'ph-lightning');
+            } catch (e) { console.warn('fetchDynamicEvents failed:', e); }
+        }
+
         async function runAIScanner() {
             const container = document.getElementById('ai-predictions');
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-dim);">🧠 Анализ...</div>';
+            // Скелетон-лоадер на время "анализа" (Этап 5)
+            container.innerHTML = `
+                <div class="ai-skeleton-wrap">
+                    <div class="ai-skel-label"><i class="ph-fill ph-brain"></i> Анализ спроса...</div>
+                    <div class="ai-skel-line" style="width:60%"></div>
+                    <div class="ai-skel-card"></div>
+                    <div class="ai-skel-card"></div>
+                    <div class="ai-skel-card" style="opacity:.6"></div>
+                </div>`;
+            await new Promise(r => setTimeout(r, 700)); // даём скелетону отобразиться
             const now = new Date();
             const predictions = [];
             const alternatives = [];
             
             for (let hourOffset = 1; hourOffset <= 2; hourOffset++) {
                 const futureTime = new Date(now.getTime() + hourOffset * 60 * 60 * 1000);
-                localEvents.forEach(event => {
+                app.state.localEvents.forEach(event => {
                     const predictedDemand = calculatePredictedDemand(event, futureTime);
-                    if (predictedDemand > 70) predictions.push({ location: event.name, time: futureTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), demand: predictedDemand, confidence: 0.75 + Math.random() * 0.2, reason: getDemandReason(event, futureTime) });
+                    if (predictedDemand > 70) predictions.push({ location: event.name, time: futureTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), demand: predictedDemand, confidence: 0.75 + deterministicRandom(event.id + '_' + now.getHours()) * 0.2, reason: getDemandReason(event, futureTime) });
                 });
             }
             predictions.sort((a, b) => b.demand - a.demand);
             
-            localEvents.filter(e => e.alpha >= 85).forEach(zone => {
-                const similar = localEvents.filter(p => p.id !== zone.id && p.type === zone.type && getDistance(zone.lat, zone.lng, p.lat, p.lng) < 3);
+            app.state.localEvents.filter(e => e.alpha >= 85).forEach(zone => {
+                const similar = app.state.localEvents.filter(p => p.id !== zone.id && p.type === zone.type && getDistance(zone.lat, zone.lng, p.lat, p.lng) < 3);
                 if (similar.length > 0) alternatives.push({ main: zone, alternatives: similar.map(p => ({ name: p.name, distance: getDistance(zone.lat, zone.lng, p.lat, p.lng).toFixed(1), alpha: p.alpha, advantage: p.alpha > zone.alpha ? 'Выше спрос' : 'Меньше конкуренции' })) });
             });
             
@@ -2699,7 +3023,7 @@
             if (event.type === 'nightclub' && (hour >= 22 || hour <= 3)) baseDemand *= 1.4;
             if (event.type === 'shopping' && ((hour >= 12 && hour <= 14) || (hour >= 18 && hour <= 20))) baseDemand *= 1.25;
             if (event.type === 'stadium' && hour >= 21) baseDemand *= 1.35;
-            if (weatherData.isRain) baseDemand *= 1.3;
+            if (app.state.weatherData.isRain) baseDemand *= 1.3;
             if ((dayOfWeek === 0 || dayOfWeek === 6) && ['shopping', 'stadium', 'nightclub'].includes(event.type)) baseDemand *= 1.2;
             return Math.min(100, Math.round(baseDemand));
         }
@@ -2710,7 +3034,7 @@
             if (event.type === 'business' && hour >= 17 && hour <= 20) reasons.push('Конец рабочего дня');
             if (event.type === 'nightclub' && hour >= 22) reasons.push('Ночная жизнь');
             if (event.type === 'shopping' && (hour >= 12 && hour <= 14)) reasons.push('Обеденное время');
-            if (weatherData.isRain) reasons.push('Плохая погода');
+            if (app.state.weatherData.isRain) reasons.push('Плохая погода');
             return reasons.join(', ') || 'Стандартный спрос';
         }
 
@@ -2722,17 +3046,17 @@
         }
 
         function updateStats() {
-            if (localEvents.length === 0) return;
-            const total = localEvents.length;
-            const hot = localEvents.filter(e => e.alpha >= 85).length;
-            const avgFare = Math.round(localEvents.reduce((sum, e) => sum + e.avgFare, 0) / total);
-            const nearest = Math.min(...localEvents.map(e => e.distance));
+            if (app.state.localEvents.length === 0) return;
+            const total = app.state.localEvents.length;
+            const hot = app.state.localEvents.filter(e => e.alpha >= 85).length;
+            const avgFare = Math.round(app.state.localEvents.reduce((sum, e) => sum + e.avgFare, 0) / total);
+            const nearest = Math.min(...app.state.localEvents.map(e => e.distance));
             document.getElementById('stat-total').textContent = total;
             document.getElementById('stat-hot').textContent = hot;
             document.getElementById('stat-fare').textContent = avgFare > 100 ? `${avgFare}₽` : avgFare;
             document.getElementById('stat-nearest').textContent = `${nearest.toFixed(1)} км`;
             document.getElementById('stat-flows').textContent = flowLines.length;
-            document.getElementById('stat-achievements').textContent = userStats.achievements.length;
+            document.getElementById('stat-achievements').textContent = app.state.userStats.achievements.length;
         }
 
         function toggleSettings() {
@@ -2748,18 +3072,18 @@
         }
 
         function toggleAutoRefresh(checked) {
-            autoRefreshEnabled = checked;
+            app.state.autoRefreshEnabled = checked;
             if (checked && !autoRefreshInterval) { autoRefreshInterval = setInterval(manualRefresh, 15 * 60 * 1000); showNotification('🔄 Автообновление включено', 'ph-arrows-clockwise'); }
             else if (!checked && autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; showNotification('🔄 Автообновление отключено', 'ph-arrows-clockwise'); }
         }
 
         async function manualRefresh() {
             showNotification('🔄 Обновление...', 'ph-arrows-clockwise');
-            await fetchWeather(baseLat, baseLng);
-            localEvents = localEvents.map(e => ({ ...e, alpha: recalculateAlpha(e), distance: getDistance(baseLat, baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha);
-            renderEventsList(); updateStats();
-            if (heatmapEnabled) renderHeatmap();
-            if (crowdFlowEnabled) renderCrowdFlow();
+            await fetchWeather(app.state.baseLat, app.state.baseLng);
+            const refreshed = app.state.localEvents.map(e => ({ ...e, alpha: recalculateAlpha(e), distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha);
+            app.setLocalEvents(refreshed); // -> data:updated -> renderEventsList + updateStats
+            if (app.state.heatmapEnabled) renderHeatmap();
+            if (app.state.crowdFlowEnabled) renderCrowdFlow();
             showNotification(`✅ Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`, 'ph-check-circle');
         }
 
@@ -2770,23 +3094,23 @@
             if (event.type === 'business' && hour >= 17 && hour <= 20) newAlpha *= 1.15;
             if (event.type === 'nightclub' && (hour >= 22 || hour <= 3)) newAlpha *= 1.2;
             if (event.type === 'shopping' && ((hour >= 12 && hour <= 14) || (hour >= 18 && hour <= 20))) newAlpha *= 1.1;
-            if (weatherData.isRain) newAlpha *= 1.25;
+            if (app.state.weatherData.isRain) newAlpha *= 1.25;
             return Math.min(100, Math.round(newAlpha));
         }
 
         function toggleVoice() {
-            voiceEnabled = !voiceEnabled;
+            app.state.voiceEnabled = !app.state.voiceEnabled;
             document.getElementById('btn-voice').classList.toggle('active');
-            if (voiceEnabled) { showNotification('🔊 Голос включен', 'ph-speaker-high'); playVoiceBriefing(); }
+            if (app.state.voiceEnabled) { showNotification('🔊 Голос включен', 'ph-speaker-high'); playVoiceBriefing(); }
             else showNotification('🔇 Голос выключен', 'ph-speaker-slash');
         }
 
         function playVoiceBriefing() {
-            if (!voiceEnabled || !('speechSynthesis' in window) || localEvents.length === 0) return;
-            const top = localEvents.slice(0, 3);
-            const text = `Загружено ${localEvents.length} зон. Лучшая: ${top[0].name}. Пик спроса ${top[0].demandReason.peakTime}. Расстояние ${top[0].distance.toFixed(1)} километров.`;
+            if (!app.state.voiceEnabled || !('speechSynthesis' in window) || app.state.localEvents.length === 0) return;
+            const top = app.state.localEvents.slice(0, 3);
+            const text = `Загружено ${app.state.localEvents.length} зон. Лучшая: ${top[0].name}. Пик спроса ${top[0].demandReason.peakTime}. Расстояние ${top[0].distance.toFixed(1)} километров.`;
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = currentLanguage === 'ru' ? 'ru-RU' : currentLanguage;
+            utterance.lang = app.state.currentLanguage === 'ru' ? 'ru-RU' : app.state.currentLanguage;
             utterance.rate = 1.0; utterance.pitch = 1.0;
             window.speechSynthesis.speak(utterance);
         }
@@ -2798,18 +3122,25 @@
             const carIconUrl = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="rgba(192,38,211,0.3)"/><path d="M240,112H216V72a16,16,0,0,0-16-16H56A16,16,0,0,0,40,72v40H16a8,8,0,0,0,0,16H240a8,8,0,0,0,0-16Z" fill="#C026D3"/><circle cx="84" cy="164" r="12" fill="#000"/><circle cx="172" cy="164" r="12" fill="#000"/></svg>')}`;
             const carIcon = L.icon({ iconUrl: carIconUrl, iconSize: [32, 32], iconAnchor: [16, 16] });
             
-            navigator.geolocation.watchPosition(pos => {
-                baseLat = pos.coords.latitude; baseLng = pos.coords.longitude;
+            navigator.geolocation.watchPosition(async (pos) => {
+                app.state.baseLat = pos.coords.latitude; app.state.baseLng = pos.coords.longitude;
                 if (pos.coords.speed !== null) document.getElementById('speed-display').innerText = Math.round(pos.coords.speed * 3.6);
                 if (!userMarker && map) {
-                    userMarker = L.marker([baseLat, baseLng], { icon: carIcon, zIndexOffset: 2000 }).addTo(map);
-                    userCircle = L.circle([baseLat, baseLng], { radius: pos.coords.accuracy / 2, color: '#C026D3', weight: 1, fillOpacity: 0.15 }).addTo(map);
+                    userMarker = L.marker([app.state.baseLat, app.state.baseLng], { icon: carIcon, zIndexOffset: 2000 }).addTo(map);
+                    userCircle = L.circle([app.state.baseLat, app.state.baseLng], { radius: pos.coords.accuracy / 2, color: '#C026D3', weight: 1, fillOpacity: 0.15 }).addTo(map);
                 } else if (userMarker) {
-                    userMarker.setLatLng([baseLat, baseLng]);
-                    userCircle.setLatLng([baseLat, baseLng]);
+                    userMarker.setLatLng([app.state.baseLat, app.state.baseLng]);
+                    userCircle.setLatLng([app.state.baseLat, app.state.baseLng]);
                     userCircle.setRadius(pos.coords.accuracy / 2);
                 }
-                localEvents = localEvents.map(e => ({ ...e, distance: getDistance(baseLat, baseLng, e.lat, e.lng) }));
+                app.state.localEvents = app.state.localEvents.map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) }));
+
+                // Сохраняем последнюю позицию в IndexedDB (не чаще раза в 15с) — для офлайн-восстановления
+                const now = Date.now();
+                if (now - lastPosSaveAt > 15000) {
+                    lastPosSaveAt = now;
+                    try { await idbSet('trp_last_position', { lat: app.state.baseLat, lng: app.state.baseLng, timestamp: now }); } catch (e) {}
+                }
             }, () => {}, { enableHighAccuracy: true, maximumAge: 2000 });
         }
 
@@ -2841,10 +3172,13 @@
             
             const startBtn = document.getElementById('btn-start');
             if (!startBtn) return;
-            
+
+            // PubSub (Этап 3): UI реагирует на изменение данных сам, а не вызывается вручную из каждой функции
+            app.on('data:updated', () => { renderEventsList(); updateStats(); });
+
             const savedTheme = localStorage.getItem('trp_theme');
             if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
-            setLanguage(currentLanguage);
+            setLanguage(app.state.currentLanguage);
             
             setInterval(() => {
                 const now = new Date();
@@ -2856,7 +3190,7 @@
             document.getElementById('search-input').addEventListener('input', (e) => {
                 const query = e.target.value.toLowerCase().trim();
                 if (!query) { renderEventsList(); return; }
-                const filtered = localEvents.filter(event => event.name.toLowerCase().includes(query) || event.address.toLowerCase().includes(query) || event.typeLabel.toLowerCase().includes(query));
+                const filtered = app.state.localEvents.filter(event => event.name.toLowerCase().includes(query) || event.address.toLowerCase().includes(query) || event.typeLabel.toLowerCase().includes(query));
                 const list = document.getElementById('events-list');
                 list.innerHTML = '';
                 filtered.forEach(e => {
@@ -2899,18 +3233,18 @@
                         await new Promise((resolve) => {
                             navigator.geolocation.getCurrentPosition(
                                 async (pos) => {
-                                    baseLat = pos.coords.latitude; baseLng = pos.coords.longitude;
+                                    app.state.baseLat = pos.coords.latitude; app.state.baseLng = pos.coords.longitude;
                                     try {
-                                        await detectCityFromGPS(baseLat, baseLng);
-                                        await fetchWeather(baseLat, baseLng);
-                                        await validateAllCoordinates(masterEventsDB.filter(e => e.city === cityName).slice(0, 15));
+                                        await detectCityFromGPS(app.state.baseLat, app.state.baseLng);
+                                        await fetchWeather(app.state.baseLat, app.state.baseLng);
+                                        await validateAllCoordinates(masterEventsDB.filter(e => e.city === app.state.cityName).slice(0, 15));
                                         launchApp();
                                     } catch (err) { launchApp(); }
                                     resolve();
                                 },
                                 async (err) => {
                                     if (status) status.textContent = '⚠️ GPS недоступен, Москва';
-                                    try { await fetchWeather(baseLat, baseLng); } catch (e) {}
+                                    try { await fetchWeather(app.state.baseLat, app.state.baseLng); } catch (e) {}
                                     launchApp();
                                     resolve();
                                 },
@@ -2919,7 +3253,7 @@
                             setTimeout(() => { launchApp(); resolve(); }, 10000);
                         });
                     } else {
-                        await fetchWeather(baseLat, baseLng);
+                        await fetchWeather(app.state.baseLat, app.state.baseLng);
                         launchApp();
                     }
                 } catch (error) {
