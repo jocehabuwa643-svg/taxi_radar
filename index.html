@@ -650,6 +650,58 @@
         body.anim-paused .flow-line-animated,
         body.anim-paused .flow-arrow-animated { animation-play-state: paused !important; }
 
+        /* === EVENT DRAWER (bottom-sheet карточка события, mobile-first) — Приоритет 3 === */
+        #event-drawer-backdrop {
+            position: fixed; inset: 0; z-index: 10040;
+            background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease;
+        }
+        #event-drawer-backdrop.open { opacity: 1; visibility: visible; }
+
+        #event-drawer {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 10041;
+            display: flex; flex-direction: column; max-height: 80vh;
+            background: var(--bg-glass-strong);
+            backdrop-filter: blur(26px) saturate(1.4); -webkit-backdrop-filter: blur(26px) saturate(1.4);
+            border-top: 1px solid var(--border);
+            border-radius: 26px 26px 0 0;
+            box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.55);
+            padding: 0 18px calc(16px + env(safe-area-inset-bottom, 0px));
+            transform: translateY(101%);
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            overscroll-behavior: contain; will-change: transform;
+        }
+        #event-drawer.open { transform: translateY(0); }
+        @media (min-width: 700px) { #event-drawer { left: auto; right: 24px; width: 400px; border-radius: 26px; bottom: 24px; } }
+
+        .drawer-handle { padding: 12px 0 4px; display: flex; justify-content: center; cursor: grab; touch-action: none; }
+        .drawer-bar { width: 44px; height: 5px; border-radius: 10px; background: rgba(255, 255, 255, 0.32); }
+        .drawer-close {
+            position: absolute; top: 12px; right: 14px; width: 34px; height: 34px; border-radius: 50%;
+            border: 1px solid var(--border); background: rgba(255, 255, 255, 0.07); color: var(--text-primary);
+            display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; z-index: 2;
+            transition: transform 0.15s, background 0.15s;
+        }
+        .drawer-close:active { transform: scale(0.9); background: rgba(255, 255, 255, 0.14); }
+        .drawer-body { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding-bottom: 6px; }
+
+        .drawer-alpha { display: flex; align-items: center; gap: 14px; margin: 8px 0 14px; }
+        .drawer-alpha-num { font-family: 'Oswald', sans-serif; font-size: 2.5rem; font-weight: 700; line-height: 0.9; }
+        .drawer-alpha-bar { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.09); overflow: hidden; }
+        .drawer-alpha-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #10b981, #f59e0b 55%, #ef4444); transition: width 0.4s ease; }
+        .drawer-actions {
+            position: sticky; bottom: 0; display: flex; gap: 10px; margin-top: 6px; padding: 12px 0 4px;
+            background: linear-gradient(to top, var(--bg-glass-strong) 72%, transparent);
+        }
+        .drawer-btn {
+            flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 14px; border-radius: 14px; font-weight: 700; font-size: 0.9rem;
+            border: none; cursor: pointer; text-decoration: none; transition: transform 0.15s;
+        }
+        .drawer-btn.primary { background: var(--accent); color: #fff; box-shadow: var(--shadow-glow); }
+        .drawer-btn.secondary { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); border: 1px solid var(--border); }
+        .drawer-btn:active { transform: scale(0.96); }
+
         .drag-handle {
             width: 100%;
             padding: 16px 0;
@@ -1294,7 +1346,32 @@
         .achievement-content p { font-size: 0.8rem; opacity: 0.9; }
 
         .flow-line-animated { animation: flowMove 3s linear infinite; }
-        @keyframes flowMove { to { stroke-dashoffset: -25; } }
+
+        /* === PEDESTRIAN FLOW: SVG overlay + CSS animation (Приоритет 4) === */
+        .flow-svg { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+        .flow-path {
+            fill: none; stroke-linecap: round;
+            stroke-dasharray: 12 8; stroke-dashoffset: 0;
+            animation: flowMove 2s linear infinite;
+        }
+        @keyframes flowMove { to { stroke-dashoffset: -40; } } /* -40 кратно (12+8) => бесшовный цикл */
+        .flow-arrow { animation: flowArrowPulse 1.6s ease-in-out infinite; }
+        @keyframes flowArrowPulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+        /* Типы потоков: разная скорость/паттерн */
+        .flow-morning   { animation-duration: 2.4s; }                       /* утро — спокойнее */
+        .flow-lunch     { animation-duration: 2s; }
+        .flow-evening   { animation-duration: 1.6s; }                       /* вечер — интенсивнее */
+        .flow-night     { animation: flowMove 1.8s linear infinite, flowNightPulse 1.4s ease-in-out infinite; }
+        @keyframes flowNightPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+        .flow-transport { stroke-dasharray: 4 10; animation-duration: 2.6s; } /* транспорт — мелкий пунктир */
+        .flow-weather   { animation-duration: 1.1s; }                        /* дождь — быстрый, «спешат» */
+
+        /* Плавающая легенда потоков */
+        .flow-legend { padding: 12px 14px; border-radius: 14px; font-size: 0.75rem; line-height: 1.2; }
+        .flow-legend .legend-title { font-weight: 700; margin-bottom: 8px; color: var(--accent); font-size: 0.8rem; }
+        .flow-legend .legend-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--text-secondary); white-space: nowrap; }
+        .flow-legend .legend-color { width: 18px; height: 6px; border-radius: 4px; display: inline-block; flex-shrink: 0; }
 
         .heatmap-pulse-animation { animation: heatmapPulse 2s ease-out infinite; }
         @keyframes heatmapPulse {
@@ -1633,6 +1710,7 @@
         <button id="btn-settings" class="fab-btn" onclick="toggleSettings()"><i class="ph-fill ph-gear"></i></button>
         <button id="btn-refresh" class="fab-btn" onclick="manualRefresh()"><i class="ph-bold ph-arrows-clockwise"></i></button>
         <button id="btn-voice" class="fab-btn" onclick="toggleVoice()"><i class="ph-fill ph-speaker-high"></i></button>
+        <button id="btn-fitall" class="fab-btn" onclick="fitMapToEvents()" title="Показать весь город"><i class="ph-bold ph-crosshair"></i></button>
         <button id="btn-locate" class="fab-btn" onclick="locateMe()"><i class="ph-fill ph-navigation-arrow"></i></button>
     </div>
 
@@ -1651,6 +1729,14 @@
             <button class="rec-btn primary" id="rec-go" onclick="goToRecommended()"><i class="ph-bold ph-navigation-arrow"></i> Поехать</button>
             <button class="rec-btn secondary" onclick="dismissRecommendation()"><i class="ph-bold ph-x"></i> Позже</button>
         </div>
+    </div>
+
+    <!-- Мобильная карточка события: bottom-sheet drawer вместо L.popup (Приоритет 3) -->
+    <div id="event-drawer-backdrop" onclick="closeEventDrawer()"></div>
+    <div id="event-drawer" role="dialog" aria-modal="true" aria-label="Карточка зоны спроса">
+        <div class="drawer-handle" id="drawer-handle"><div class="drawer-bar"></div></div>
+        <button class="drawer-close" onclick="closeEventDrawer()" aria-label="Закрыть"><i class="ph-bold ph-x"></i></button>
+        <div id="drawer-body" class="drawer-body"></div>
     </div>
 
     <div id="bottom-sheet" class="glass hide-bottom">
@@ -2148,7 +2234,9 @@
                     currentLanguage: localStorage.getItem('trp_language') || 'ru',
                     recommendedPoint: null,
                     deferredPrompt: null, // событие beforeinstallprompt для нативной установки PWA (Этап 6)
-                    flowHourOverride: null // перемотка времени для AI-потоков (Приоритет 3); null = текущий час
+                    flowHourOverride: null, // перемотка времени для AI-потоков (Приоритет 3); null = текущий час
+                    mode: 'default', // режим карты: default | heatmap | flow (state machine)
+                    currentOpenEventId: null // открытая карточка-drawer; переживает refresh/mode-switch
                 };
                 // Простой PubSub поверх EventTarget
                 this.events = new EventTarget();
@@ -2177,7 +2265,10 @@
 
         // --- Транзиентные runtime-хендлы (НЕ наблюдаемое состояние, вне app.state) ---
         let map = null;
-        let clusterGroup = null;
+        let clusterGroup = null;   // markercluster; он же markersGroup
+        let markersGroup = null;   // Layer Group для маркеров (= clusterGroup)
+        let heatmapGroup = null;   // Layer Group для тепловой карты + пульсаций
+        let flowGroup = null;      // Layer Group для потоков (ant-path)
         let userMarker = null;
         let userCircle = null;
         let mapMarkers = {};
@@ -2701,17 +2792,18 @@ out center ${POI_LIMIT * 3};`;
             if (animate) {
                 await startLoadingRadar();                               // анимированное появление маркеров (само управляет overlay)
             } else {
-                if (clusterGroup) clusterGroup.clearLayers();
+                if (markersGroup) markersGroup.clearLayers();
                 mapMarkers = {};
                 events.forEach(createMarker);
             }
+
+            fitMapToEvents();           // авто-подгон карты под зоны города (launchApp + selectCity идут сюда)
+            refreshCurrentMode();       // если активен heatmap/flow — пересобрать под новые данные
 
             const srcLabel = { overpass: 'OSM/Overpass', cache: 'кэш 7д', 'stale-cache': 'кэш (устар.)', builtin: 'встроенная база' }[source] || source;
             if (source === 'builtin') showNotification('⚠️ Нет данных Overpass — встроенная база', 'ph-warning');
             else if (source === 'stale-cache') showNotification('📦 Overpass недоступен — POI из кэша', 'ph-database');
             showNotification(`✅ ${name}: ${events.length} зон • ${srcLabel}`, 'ph-check-circle');
-            if (app.state.heatmapEnabled) renderHeatmap();
-            if (app.state.crowdFlowEnabled) renderCrowdFlow();
             loadDynamicEvents();                                         // динамические события поверх (Этап 5)
         }
 
@@ -2733,7 +2825,7 @@ out center ${POI_LIMIT * 3};`;
                 startTracking();
 
                 appRunning = true;
-                if (app.state.autoRefreshEnabled) autoRefreshInterval = setInterval(manualRefresh, 15 * 60 * 1000);
+                if (app.state.autoRefreshEnabled) autoRefreshInterval = setInterval(() => manualRefresh(false), 15 * 60 * 1000);
                 startBackgroundScanners();
 
                 // Загрузка реальных POI города через Overpass + анимация радара (Приоритет 1)
@@ -2769,7 +2861,12 @@ out center ${POI_LIMIT * 3};`;
                     });
                 }
             });
-            map.addLayer(clusterGroup);
+
+            // Layer Groups: единая архитектура слоёв для state machine (default/heatmap/flow)
+            markersGroup = clusterGroup;      // маркеры кластеризуются
+            heatmapGroup = L.layerGroup();
+            flowGroup = L.layerGroup();
+            map.addLayer(markersGroup);       // стартовый режим = default (видны только маркеры)
 
             map.invalidateSize();
         }
@@ -2837,7 +2934,7 @@ out center ${POI_LIMIT * 3};`;
         }
 
         function createMarker(event) {
-            if (!clusterGroup) return;
+            if (!markersGroup) return;
 
             // Размер точки масштабируется по спросу (alpha), как раньше делал радиус круга
             const size = Math.round(16 + (event.alpha / 100) * 28); // 16–44px
@@ -2850,12 +2947,91 @@ out center ${POI_LIMIT * 3};`;
 
             const marker = L.marker([event.lat, event.lng], { icon });
 
-            // Lazy rendering: функция-контент вызывается Leaflet только в момент открытия попапа
-            marker.bindPopup(() => buildPopupHtml(event), { maxWidth: 380 });
+            // Вместо L.popup — открываем мобильный bottom-sheet drawer (Приоритет 3)
+            marker.on('click', () => openEventDrawer(event.id));
 
-            clusterGroup.addLayer(marker);
+            markersGroup.addLayer(marker);
             mapMarkers[event.id] = marker;
         }
+
+        // Богатый контент карточки для drawer (alpha-градиент + причина + таймлайн + факторы + действия)
+        function buildDrawerHtml(event) {
+            const verifiedBadge = event.verified
+                ? `<span class="verified-badge verified"><i class="ph-fill ph-check-circle"></i></span>`
+                : `<span class="verified-badge unverified"><i class="ph-fill ph-warning"></i></span>`;
+            const alphaColor = event.alpha >= 85 ? 'var(--danger)' : event.alpha >= 70 ? 'var(--warning)' : 'var(--success)';
+            return `
+                <div style="margin-bottom: 4px;">
+                    <div style="font-size:0.72rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em; display:flex; align-items:center; gap:6px; margin-bottom:4px;">${event.typeLabel} ${verifiedBadge}</div>
+                    <h3 style="font-size:1.3rem; font-weight:700; line-height:1.15;">${event.name}</h3>
+                    <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;"><i class="ph-fill ph-map-pin"></i> ${event.address}</div>
+                </div>
+                <div class="drawer-alpha">
+                    <div class="drawer-alpha-num" style="color:${alphaColor};">${event.alpha}</div>
+                    <div style="flex:1;">
+                        <div style="font-size:0.66rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">α-Score спроса</div>
+                        <div class="drawer-alpha-bar"><div class="drawer-alpha-fill" style="width:${Math.max(0, Math.min(100, event.alpha))}%;"></div></div>
+                    </div>
+                </div>
+                <div class="popup-demand-reason"><strong>💡 ПОЧЕМУ ЗДЕСЬ СПРОС:</strong><div style="margin-top:5px;">${event.demandReason.primary}</div></div>
+                <div class="popup-stats">
+                    <div class="popup-stat"><div class="popup-stat-value">⏰ ${event.demandReason.peakTime}</div><div class="popup-stat-label">Пик спроса</div></div>
+                    <div class="popup-stat"><div class="popup-stat-value">${event.avgFare}${event.avgFare > 100 ? '₽' : ''}</div><div class="popup-stat-label">Средний чек</div></div>
+                    <div class="popup-stat"><div class="popup-stat-value" style="color: var(--${getCompetitionLevel(event.competition.ratio)});">${event.competition.taxis}</div><div class="popup-stat-label">Такси в зоне</div></div>
+                    <div class="popup-stat"><div class="popup-stat-value">${event.distance.toFixed(1)} км</div><div class="popup-stat-label">Расстояние</div></div>
+                </div>
+                ${generateTimeline(event)}
+                <div style="display:flex; flex-wrap:wrap; gap:5px; margin:12px 0;">
+                    ${event.dynamicFactors.map(f => `<div style="background:rgba(255,255,255,0.06); border:1px solid var(--border); padding:4px 10px; border-radius:10px; font-size:0.7rem;">${f.factor} <span style="color:var(--success); font-weight:700;">${f.impact}</span></div>`).join('')}
+                </div>
+                <div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:10px; margin:12px 0; font-size:0.78rem;">💰 <strong>Совет:</strong> ${event.demandReason.tips}</div>
+                <div class="drawer-actions">
+                    <a href="https://yandex.ru/maps/?rtext=~${event.lat},${event.lng}&rtt=auto" target="_blank" class="drawer-btn primary"><i class="ph-bold ph-navigation-arrow"></i> Навигация</a>
+                    <button type="button" class="drawer-btn secondary" onclick="focusDrawerEvent()"><i class="ph-bold ph-crosshair"></i> Фокус на карте</button>
+                </div>
+            `;
+        }
+
+        function openEventDrawer(eventId) {
+            const event = app.state.localEvents.find(e => e.id === eventId);
+            if (!event) return;
+            app.state.currentOpenEventId = eventId;
+            const body = document.getElementById('drawer-body');
+            body.innerHTML = buildDrawerHtml(event);
+            body.scrollTop = 0;
+            document.getElementById('event-drawer').classList.add('open');
+            document.getElementById('event-drawer-backdrop').classList.add('open');
+        }
+
+        function closeEventDrawer() {
+            app.state.currentOpenEventId = null;
+            document.getElementById('event-drawer').classList.remove('open');
+            document.getElementById('event-drawer-backdrop').classList.remove('open');
+        }
+
+        // Стабильность: при refresh/mode-switch НЕ закрываем drawer — обновляем данные внутри (с сохранением скролла)
+        function updateEventDrawer() {
+            const id = app.state.currentOpenEventId;
+            if (!id) return;
+            const event = app.state.localEvents.find(e => e.id === id);
+            if (!event) { closeEventDrawer(); return; } // зона исчезла (смена города) — закрываем
+            const body = document.getElementById('drawer-body');
+            const st = body.scrollTop;
+            body.innerHTML = buildDrawerHtml(event);
+            body.scrollTop = st;
+        }
+
+        // «Фокус на карте»: закрываем карточку и летим к зоне (в default-режиме, чтобы маркеры были видны)
+        function focusDrawerEvent() {
+            const id = app.state.currentOpenEventId;
+            const event = id ? app.state.localEvents.find(e => e.id === id) : null;
+            if (!event || !map) return;
+            closeEventDrawer();
+            if (app.state.mode !== 'default') setMode('default');
+            map.flyTo([event.lat, event.lng], 16, { duration: 0.8 });
+        }
+        window.closeEventDrawer = closeEventDrawer;
+        window.focusDrawerEvent = focusDrawerEvent;
 
         function generateTimeline(event) {
             const now = new Date();
@@ -2885,17 +3061,19 @@ out center ${POI_LIMIT * 3};`;
         function focusOnEvent(eventId) {
             const event = app.state.localEvents.find(e => e.id === eventId);
             if (!event || !map) return;
+            // Фокус на зоне подразумевает видимые маркеры — выходим из heatmap/flow в default
+            if (app.state.mode !== 'default') setMode('default');
             const marker = mapMarkers[eventId];
 
-            // Раскрываем кластер (если маркер внутри него), затем открываем попап
-            if (marker && clusterGroup) {
-                clusterGroup.zoomToShowLayer(marker, () => {
+            // Раскрываем кластер (если маркер внутри него), затем открываем drawer-карточку
+            if (marker && markersGroup && map.hasLayer(markersGroup)) {
+                markersGroup.zoomToShowLayer(marker, () => {
                     map.flyTo([event.lat, event.lng], 16, { duration: 0.8 });
-                    setTimeout(() => marker.openPopup(), 850);
+                    setTimeout(() => openEventDrawer(eventId), 850);
                 });
             } else {
                 map.flyTo([event.lat, event.lng], 16, { duration: 0.8 });
-                setTimeout(() => { if (marker) marker.openPopup(); }, 850);
+                setTimeout(() => openEventDrawer(eventId), 850);
             }
         }
 
@@ -3010,22 +3188,84 @@ out center ${POI_LIMIT * 3};`;
             await loadCityEvents(lat, lng, name, country, false);
         }
 
-        function toggleHeatmap() {
-            app.state.heatmapEnabled = !app.state.heatmapEnabled;
-            document.getElementById('setting-heatmap').checked = app.state.heatmapEnabled;
-            if (app.state.heatmapEnabled) { renderHeatmap(); document.getElementById('btn-heatmap').classList.add('active'); showNotification('🗺️ Тепловая карта включена', 'ph-flame'); }
-            else { if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; } if (window.heatmapLegend) { window.heatmapLegend.remove(); window.heatmapLegend = null; } document.getElementById('btn-heatmap').classList.remove('active'); showNotification('🗺️ Тепловая карта отключена', 'ph-flame'); }
+        // ============================================
+        // MODE STATE MACHINE: default | heatmap | flow
+        // Единый переключатель — снимает предыдущий слой, включает нужный (слои не конфликтуют).
+        // ============================================
+        const MAP_MODES = ['default', 'heatmap', 'flow'];
+
+        function setMode(mode) {
+            if (!map || !markersGroup) return;
+            if (!MAP_MODES.includes(mode)) mode = 'default';
+            app.state.mode = mode;
+
+            // 1) Синхронизируем legacy-флаги ДО рендера (renderCrowdFlow проверяет crowdFlowEnabled)
+            app.state.heatmapEnabled = (mode === 'heatmap');
+            app.state.crowdFlowEnabled = (mode === 'flow');
+
+            // 2) Снимаем ВСЕ режимные слои и чистим их содержимое
+            if (map.hasLayer(markersGroup)) map.removeLayer(markersGroup);
+            if (map.hasLayer(heatmapGroup)) map.removeLayer(heatmapGroup);
+            if (map.hasLayer(flowGroup)) map.removeLayer(flowGroup);
+            clearHeatmap();
+            clearCrowdFlow();
+
+            // 3) Включаем слой активного режима
+            if (mode === 'heatmap') {
+                map.addLayer(heatmapGroup);
+                renderHeatmap();
+            } else if (mode === 'flow') {
+                map.addLayer(flowGroup);
+                renderCrowdFlow();
+            } else {
+                map.addLayer(markersGroup);
+            }
+
+            if (mode === 'flow') showFlowLegend(); else hideFlowLegend(); // легенда только в режиме потоков
+            updateModeButtons();
         }
 
-        function toggleHeatmapSetting(checked) {
-            app.state.heatmapEnabled = checked;
-            if (checked) { renderHeatmap(); document.getElementById('btn-heatmap').classList.add('active'); }
-            else { if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; } if (window.heatmapLegend) { window.heatmapLegend.remove(); window.heatmapLegend = null; } document.getElementById('btn-heatmap').classList.remove('active'); }
+        // Перерисовать активный оверлей после смены данных города (маркеры уже пересозданы)
+        function refreshCurrentMode() {
+            if (app.state.mode === 'heatmap') renderHeatmap();
+            else if (app.state.mode === 'flow') renderCrowdFlow();
         }
+
+        // FAB-кнопки и чекбохсы отражают активный режим
+        function updateModeButtons() {
+            const m = app.state.mode;
+            const hmBtn = document.getElementById('btn-heatmap');
+            const cfBtn = document.getElementById('btn-crowdflow');
+            if (hmBtn) hmBtn.classList.toggle('active', m === 'heatmap');
+            if (cfBtn) cfBtn.classList.toggle('active', m === 'flow');
+            const hmSet = document.getElementById('setting-heatmap');
+            const cfSet = document.getElementById('setting-flows');
+            if (hmSet) hmSet.checked = (m === 'heatmap');
+            if (cfSet) cfSet.checked = (m === 'flow');
+        }
+
+        // Auto-fit карты по всем зонам города — убирает «случайный зум» на старте
+        // Auto-fit: подгоняет карту так, чтобы влезли ВСЕ зоны города (padding 50px). Убирает случайный зум.
+        function fitMapToEvents() {
+            if (!map || !app.state.localEvents.length) return;
+            try {
+                const bounds = L.latLngBounds(app.state.localEvents.map(e => [e.lat, e.lng]));
+                if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+            } catch (e) { console.warn('fitBounds failed:', e); }
+        }
+        window.fitMapToEvents = fitMapToEvents; // для inline-onclick FAB-кнопки
+
+        // Кнопки/чекбоксы = toggle режима (повторное нажатие возвращает в default)
+        function toggleHeatmap() {
+            const next = app.state.mode === 'heatmap' ? 'default' : 'heatmap';
+            setMode(next);
+            showNotification(next === 'heatmap' ? '🗺️ Тепловая карта' : '🗺️ Обычный режим', 'ph-flame');
+        }
+        function toggleHeatmapSetting(checked) { setMode(checked ? 'heatmap' : 'default'); }
 
         function renderHeatmap() {
-            if (!map || app.state.localEvents.length === 0) return;
-            if (heatLayer) map.removeLayer(heatLayer);
+            if (!map || !heatmapGroup || app.state.localEvents.length === 0) return;
+            heatmapGroup.clearLayers();                 // пересобираем слой начисто
             const heatData = app.state.localEvents.map(e => {
                 const weatherImpact = app.state.weatherData.isRain ? 1.3 : 1.0;
                 const timeImpact = getTimeMultiplier(e.type);
@@ -3034,9 +3274,16 @@ out center ${POI_LIMIT * 3};`;
             });
             const aiHotspots = generateAIHotspots();
             heatData.push(...aiHotspots);
-            heatLayer = L.heatLayer(heatData, { radius: 50, blur: 30, maxZoom: 16, minOpacity: 0.3, max: 1.0, gradient: { 0.0: '#0000ff', 0.2: '#00ff00', 0.4: '#adff2f', 0.6: '#ffff00', 0.8: '#ffa500', 1.0: '#ff0000' } }).addTo(map);
+            heatLayer = L.heatLayer(heatData, { radius: 50, blur: 30, maxZoom: 16, minOpacity: 0.3, max: 1.0, gradient: { 0.0: '#0000ff', 0.2: '#00ff00', 0.4: '#adff2f', 0.6: '#ffff00', 0.8: '#ffa500', 1.0: '#ff0000' } });
+            heatmapGroup.addLayer(heatLayer);           // в группу, а не напрямую на карту
             addHeatmapLegend();
             animateHotZones();
+        }
+
+        function clearHeatmap() {
+            if (heatmapGroup) heatmapGroup.clearLayers();
+            heatLayer = null;
+            if (window.heatmapLegend) { window.heatmapLegend.remove(); window.heatmapLegend = null; }
         }
 
         function getTimeMultiplier(type) {
@@ -3082,30 +3329,25 @@ out center ${POI_LIMIT * 3};`;
         }
 
         function animateHotZones() {
-            if (document.hidden) return; // не запускаем пульсации в фоне (Этап 6)
+            if (document.hidden || !heatmapGroup) return; // не запускаем пульсации в фоне (Этап 6)
             app.state.localEvents.filter(e => e.alpha >= 85).forEach(zone => {
-                const pulse = L.circle([zone.lat, zone.lng], { radius: 300, color: '#ff0000', fillColor: '#ff0000', fillOpacity: 0, weight: 3, className: 'heatmap-pulse-animation' }).addTo(map);
+                const pulse = L.circle([zone.lat, zone.lng], { radius: 300, color: '#ff0000', fillColor: '#ff0000', fillOpacity: 0, weight: 3, className: 'heatmap-pulse-animation' });
+                heatmapGroup.addLayer(pulse);
                 let opacity = 0.6; let radius = 300;
                 const interval = setInterval(() => {
                     opacity -= 0.02; radius += 8;
-                    if (opacity <= 0) { clearInterval(interval); map.removeLayer(pulse); }
+                    if (opacity <= 0) { clearInterval(interval); heatmapGroup.removeLayer(pulse); }
                     else pulse.setStyle({ fillOpacity: opacity * 0.3, radius: radius });
                 }, 50);
             });
         }
 
         function toggleCrowdFlow() {
-            app.state.crowdFlowEnabled = !app.state.crowdFlowEnabled;
-            document.getElementById('setting-flows').checked = app.state.crowdFlowEnabled;
-            if (app.state.crowdFlowEnabled) { renderCrowdFlow(); document.getElementById('btn-crowdflow').classList.add('active'); showNotification('📊 Потоки включены', 'ph-flow-arrow'); }
-            else { clearCrowdFlow(); document.getElementById('btn-crowdflow').classList.remove('active'); showNotification('📊 Потоки отключены', 'ph-flow-arrow'); }
+            const next = app.state.mode === 'flow' ? 'default' : 'flow';
+            setMode(next);
+            showNotification(next === 'flow' ? '📊 Потоки людей' : '📊 Обычный режим', 'ph-flow-arrow');
         }
-
-        function toggleCrowdFlowSetting(checked) {
-            app.state.crowdFlowEnabled = checked;
-            if (checked) { renderCrowdFlow(); document.getElementById('btn-crowdflow').classList.add('active'); }
-            else { clearCrowdFlow(); document.getElementById('btn-crowdflow').classList.remove('active'); }
-        }
+        function toggleCrowdFlowSetting(checked) { setMode(checked ? 'flow' : 'default'); }
 
         // ============================================
         // FlowEngine (Приоритет 3): OD-матрица потоков людей.
@@ -3144,23 +3386,27 @@ out center ${POI_LIMIT * 3};`;
             }
             function nearest(o, targets, n) { return targets.map(t => ({ t, d: _flowHaversine(o, t) })).filter(x => x.d <= MAXD).sort((a, b) => a.d - b.d).slice(0, n).map(x => x.t); }
 
-            // 07-10: Вокзалы/Аэропорты -> БЦ/центр (деловой поток В центр)
-            if (hour >= 7 && hour <= 10) transport.forEach(tr => nearest(tr, downtown, 2).forEach(d => add(tr, d, 0.85, 'business')));
+            // Транспортный поток (всегда): хабы -> ближайшие зоны (зелёный пунктир)
+            transport.forEach(tr => nearest(tr, downtown.concat(retail), 1).forEach(d => add(tr, d, 0.55, 'transport')));
+            // 07-10: Вокзалы/Аэропорты -> БЦ/центр (утренний деловой, В центр)
+            if (hour >= 7 && hour <= 10) transport.forEach(tr => nearest(tr, downtown, 2).forEach(d => add(tr, d, 0.85, 'morning')));
+            // 12-14: БЦ/центр -> ТЦ/рестораны (обеденный)
+            if (hour >= 12 && hour <= 14) downtown.slice(0, 5).forEach(o => nearest(o, retail, 1).forEach(d => add(o, d, 0.6, 'lunch')));
             // 17-19: БЦ -> Вокзалы/ТЦ/спальные (вечерний отток ИЗ центра)
             if (hour >= 17 && hour <= 19) downtown.forEach(o => {
-                nearest(o, transport, 1).forEach(d => add(o, d, 0.9, 'business'));
-                nearest(o, retail, 1).forEach(d => add(o, d, 0.7, 'business'));
-                add(o, _flowOutward(o, c, 0.05), 0.6, 'business');
+                nearest(o, transport, 1).forEach(d => add(o, d, 0.9, 'evening'));
+                nearest(o, retail, 1).forEach(d => add(o, d, 0.7, 'evening'));
+                add(o, _flowOutward(o, c, 0.05), 0.6, 'evening');
             });
-            // 22-02: ТЦ/театры -> клубы; клубы -> спальные
+            // 22-02: ТЦ/театры -> клубы; клубы -> спальные (ночной)
             if (hour >= 22 || hour <= 2) {
-                retail.concat(theaters).slice(0, 6).forEach(o => nearest(o, nightclubs, 1).forEach(d => add(o, d, 0.8, 'entertainment')));
-                nightclubs.slice(0, 4).forEach(cl => add(cl, _flowOutward(cl, c, 0.06), 0.75, 'entertainment'));
+                retail.concat(theaters).slice(0, 6).forEach(o => nearest(o, nightclubs, 1).forEach(d => add(o, d, 0.8, 'night')));
+                nightclubs.slice(0, 4).forEach(cl => add(cl, _flowOutward(cl, c, 0.06), 0.75, 'night'));
             }
             // 20-23: Стадион (окончание события) -> транспорт + наружу
             if (hour >= 20 && hour <= 23) venue.slice(0, 3).forEach(v => {
-                nearest(v, transport, 1).forEach(d => add(v, d, 0.95, 'entertainment'));
-                add(v, _flowOutward(v, c, 0.07), 0.85, 'entertainment');
+                nearest(v, transport, 1).forEach(d => add(v, d, 0.95, 'evening'));
+                add(v, _flowOutward(v, c, 0.07), 0.85, 'evening');
             });
 
             return flows.sort((a, b) => b.intensity - a.intensity).slice(0, 30); // топ-30 по интенсивности (перф)
@@ -3197,10 +3443,79 @@ out center ${POI_LIMIT * 3};`;
             };
         })();
 
-        // Цвет = тип потока: синий деловой, оранжевый развлекательный, красный погода/экстренный
-        const FLOW_COLORS = { business: '#0099ff', entertainment: '#ff9900', weather: '#ff3355' };
+        // Тип потока -> цвет / базовая толщина / CSS-класс (Приоритет 4)
+        const FLOW_STYLE = {
+            morning:   { color: '#0099ff', base: 2,   css: 'flow-morning',   label: 'Утро → БЦ' },
+            lunch:     { color: '#ff9900', base: 3,   css: 'flow-lunch',     label: 'Обед → еда' },
+            evening:   { color: '#9900ff', base: 5,   css: 'flow-evening',   label: 'Вечер → отдых' },
+            night:     { color: '#ff0066', base: 4,   css: 'flow-night',     label: 'Ночь → дом' },
+            transport: { color: '#00cc66', base: 2.5, css: 'flow-transport', label: 'Транспорт' },
+            weather:   { color: '#00d4ff', base: 6,   css: 'flow-weather',   label: 'Дождь → ТЦ' }
+        };
 
-        async function renderCrowdFlow() {
+        function svgNS(tag) { return document.createElementNS('http://www.w3.org/2000/svg', tag); }
+
+        // Кастомный Leaflet-слой: SVG overlay с bezier-путями, CSS-анимацией и стрелками (без внешних либ)
+        const PedestrianFlowLayer = L.Layer.extend({
+            initialize(flows) { this._flows = flows || []; },
+            onAdd(map) {
+                this._map = map;
+                if (!map.getPane('flowPane')) {
+                    map.createPane('flowPane');
+                    const p = map.getPane('flowPane');
+                    p.style.zIndex = 450; p.style.pointerEvents = 'none';
+                }
+                this._svg = svgNS('svg');
+                this._svg.setAttribute('class', 'flow-svg');
+                map.getPane('flowPane').appendChild(this._svg);
+                map.on('moveend zoomend viewreset', this._reset, this);
+                this._reset();
+            },
+            onRemove(map) {
+                map.off('moveend zoomend viewreset', this._reset, this);
+                if (this._svg && this._svg.parentNode) this._svg.parentNode.removeChild(this._svg);
+                this._svg = null; this._map = null;
+            },
+            _reset() {
+                const map = this._map; if (!map || !this._svg) return;
+                const b = map.getBounds();
+                const nw = map.latLngToLayerPoint(b.getNorthWest());
+                const se = map.latLngToLayerPoint(b.getSouthEast());
+                L.DomUtil.setPosition(this._svg, nw);
+                this._svg.setAttribute('width', Math.max(0, se.x - nw.x));
+                this._svg.setAttribute('height', Math.max(0, se.y - nw.y));
+                this._origin = nw;
+                this._draw();
+            },
+            _draw() {
+                const map = this._map, o = this._origin, svg = this._svg;
+                if (!svg) return;
+                while (svg.firstChild) svg.removeChild(svg.firstChild);
+                const CTRL = 50; // высота дуги bezier
+                this._flows.forEach(flow => {
+                    const a = map.latLngToLayerPoint([flow.from.lat, flow.from.lng]).subtract(o);
+                    const bpt = map.latLngToLayerPoint([flow.to.lat, flow.to.lng]).subtract(o);
+                    const cx = (a.x + bpt.x) / 2, cy = (a.y + bpt.y) / 2 - CTRL; // control point (дуга вверх)
+                    const path = svgNS('path');
+                    path.setAttribute('d', `M ${a.x} ${a.y} Q ${cx} ${cy} ${bpt.x} ${bpt.y}`);
+                    path.setAttribute('stroke', flow.color);
+                    path.setAttribute('stroke-width', flow.width);
+                    path.setAttribute('class', 'flow-path ' + (flow.cssClass || ''));
+                    path.style.filter = `drop-shadow(0 0 6px ${flow.color})`;
+                    svg.appendChild(path);
+                    // стрелка направления в конце (касательная Q-кривой = end - control)
+                    const angle = Math.atan2(bpt.y - cy, bpt.x - cx) * 180 / Math.PI;
+                    const arrow = svgNS('polygon');
+                    arrow.setAttribute('points', '0,-5 11,0 0,5');
+                    arrow.setAttribute('fill', flow.color);
+                    arrow.setAttribute('class', 'flow-arrow');
+                    arrow.setAttribute('transform', `translate(${bpt.x} ${bpt.y}) rotate(${angle})`);
+                    svg.appendChild(arrow);
+                });
+            }
+        });
+
+        async function renderCrowdFlow() { // рендер пешеходных потоков (SVG overlay)
             if (!map || app.state.localEvents.length < 2) return;
             clearCrowdFlow();
             const now = new Date();
@@ -3209,23 +3524,36 @@ out center ${POI_LIMIT * 3};`;
             if (!map || !app.state.crowdFlowEnabled) return; // мог выключиться, пока считал воркер
             if (!flows.length) { document.getElementById('stat-flows').textContent = '0'; return; }
 
-            const hasAntPath = !!(L.polyline && L.polyline.antPath);
-            flows.forEach(f => {
-                const color = FLOW_COLORS[f.type] || '#0099ff';
-                const weight = 2 + Math.round(f.intensity * 6); // толщина линии = интенсивность потока
-                const latlngs = [[f.from.lat, f.from.lng], [f.to.lat, f.to.lng]];
-                const line = hasAntPath
-                    ? L.polyline.antPath(latlngs, { color, weight, opacity: 0.85, delay: 900, dashArray: [10, 22], pulseColor: '#ffffff', hardwareAccelerated: true })
-                    : L.polyline(latlngs, { color, weight, opacity: 0.7, dashArray: '10,18', className: 'flow-line-animated' });
-                line.addTo(map);
-                flowLines.push(line);
+            const styled = flows.map(f => {
+                const s = FLOW_STYLE[f.type] || FLOW_STYLE.morning;
+                return { from: f.from, to: f.to, color: s.color, width: s.base + Math.round((f.intensity || 0.5) * 2), cssClass: s.css };
             });
+            const layer = new PedestrianFlowLayer(styled);
+            if (flowGroup) flowGroup.addLayer(layer); else layer.addTo(map);
+            flowLines.push(layer);
             document.getElementById('stat-flows').textContent = flows.length;
         }
 
+        // Плавающая легенда потоков (Leaflet-контрол, как у heatmap)
+        function showFlowLegend() {
+            if (window.flowLegend || !map) return;
+            const legend = L.control({ position: 'bottomleft' });
+            legend.onAdd = function () {
+                const div = L.DomUtil.create('div', 'flow-legend glass');
+                div.innerHTML = '<div class="legend-title">👥 Потоки людей</div>' +
+                    Object.keys(FLOW_STYLE).map(k => `<div class="legend-item"><span class="legend-color" style="background:${FLOW_STYLE[k].color}"></span>${FLOW_STYLE[k].label}</div>`).join('');
+                return div;
+            };
+            legend.addTo(map);
+            window.flowLegend = legend;
+        }
+        function hideFlowLegend() {
+            if (window.flowLegend) { window.flowLegend.remove(); window.flowLegend = null; }
+        }
+
         function clearCrowdFlow() {
-            flowLines.forEach(l => { if (map) map.removeLayer(l); });
-            flowArrows.forEach(a => { if (map) map.removeLayer(a); });
+            if (flowGroup) flowGroup.clearLayers();
+            flowLines.forEach(l => { if (map && map.hasLayer(l)) map.removeLayer(l); }); // на случай прямого addTo
             flowLines = []; flowArrows = [];
             document.getElementById('stat-flows').textContent = '0';
         }
@@ -3433,17 +3761,17 @@ out center ${POI_LIMIT * 3};`;
 
         function toggleAutoRefresh(checked) {
             app.state.autoRefreshEnabled = checked;
-            if (checked && !autoRefreshInterval) { autoRefreshInterval = setInterval(manualRefresh, 15 * 60 * 1000); showNotification('🔄 Автообновление включено', 'ph-arrows-clockwise'); }
+            if (checked && !autoRefreshInterval) { autoRefreshInterval = setInterval(() => manualRefresh(false), 15 * 60 * 1000); showNotification('🔄 Автообновление включено', 'ph-arrows-clockwise'); }
             else if (!checked && autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; showNotification('🔄 Автообновление отключено', 'ph-arrows-clockwise'); }
         }
 
-        async function manualRefresh() {
+        async function manualRefresh(userInitiated = true) {
             showNotification('🔄 Обновление...', 'ph-arrows-clockwise');
             await fetchWeather(app.state.baseLat, app.state.baseLng);
             const refreshed = app.state.localEvents.map(e => ({ ...e, alpha: recalculateAlpha(e), distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) })).sort((a, b) => b.alpha - a.alpha);
             app.setLocalEvents(refreshed); // -> data:updated -> renderEventsList + updateStats
-            if (app.state.heatmapEnabled) renderHeatmap();
-            if (app.state.crowdFlowEnabled) renderCrowdFlow();
+            refreshCurrentMode();          // пересобрать активный оверлей (heatmap/flow) под новые alpha
+            if (userInitiated) fitMapToEvents(); // ручное обновление = «показать всё»; авто-рефреш не дёргает вид
             showNotification(`✅ Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`, 'ph-check-circle');
         }
 
@@ -3534,7 +3862,7 @@ out center ${POI_LIMIT * 3};`;
             if (!startBtn) return;
 
             // PubSub (Этап 3): UI реагирует на изменение данных сам, а не вызывается вручную из каждой функции
-            app.on('data:updated', () => { renderEventsList(); updateStats(); });
+            app.on('data:updated', () => { renderEventsList(); updateStats(); updateEventDrawer(); });
 
             const savedTheme = localStorage.getItem('trp_theme');
             if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
@@ -3634,7 +3962,34 @@ out center ${POI_LIMIT * 3};`;
                 if (suppressClick) { suppressClick = false; return; }
                 snapSheet(!isCollapsed());
             });
-            
+
+            // --- Event Drawer: swipe-to-dismiss (свайп вниз закрывает карточку) ---
+            const drawerEl = document.getElementById('event-drawer');
+            const drawerHandle = document.getElementById('drawer-handle');
+            let dStartY = 0, dLastY = 0, dDragging = false, dMoved = false, dRAF = null;
+            const applyDrawerY = (y) => {
+                if (dRAF) return;
+                dRAF = requestAnimationFrame(() => { dRAF = null; drawerEl.style.transform = `translateY(${y}px)`; });
+            };
+            drawerHandle.addEventListener('touchstart', (e) => {
+                dDragging = true; dMoved = false; dStartY = dLastY = e.touches[0].clientY;
+                drawerEl.style.transition = 'none';
+            }, { passive: true });
+            drawerHandle.addEventListener('touchmove', (e) => {
+                if (!dDragging) return;
+                dLastY = e.touches[0].clientY;
+                const dy = Math.max(0, dLastY - dStartY); // тянем только вниз
+                if (dy > 4) dMoved = true;
+                applyDrawerY(dy);
+            }, { passive: true });
+            drawerHandle.addEventListener('touchend', () => {
+                if (!dDragging) return; dDragging = false;
+                if (dRAF) { cancelAnimationFrame(dRAF); dRAF = null; }
+                drawerEl.style.transition = '';
+                drawerEl.style.transform = '';
+                if (dMoved && (dLastY - dStartY) > 90) closeEventDrawer(); // свайп > 90px = закрыть
+            });
+
             startBtn.addEventListener('click', async function handleClick(e) {
                 e.preventDefault(); e.stopPropagation();
                 console.log('🚀 Клик по кнопке старта...');
