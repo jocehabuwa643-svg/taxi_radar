@@ -56,9 +56,8 @@
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
     <style>
         :root {
@@ -81,6 +80,25 @@
             --border-accent: rgba(192, 38, 211, 0.5);
             --shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
             --shadow-glow: 0 0 30px rgba(192, 38, 211, 0.3);
+
+            /* Типографика: display / data / ui (Проблема 6) */
+            --font-display: 'Oswald', sans-serif;
+            --font-data: 'JetBrains Mono', ui-monospace, monospace;
+            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+            /* 5-уровневая система теней (глубина как у Apple HIG / Linear / Stripe) */
+            --sh-xs: 0 1px 2px rgba(0,0,0,0.28);
+            --sh-sm: 0 2px 6px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.25);
+            --sh-md: 0 4px 14px rgba(0,0,0,0.32), 0 2px 4px rgba(0,0,0,0.28);
+            --sh-lg: 0 8px 28px rgba(0,0,0,0.35), 0 4px 8px rgba(0,0,0,0.30);
+            --sh-xl: 0 18px 48px rgba(0,0,0,0.45), 0 8px 18px rgba(0,0,0,0.32), 0 2px 6px rgba(0,0,0,0.28);
+            --sh-glow: 0 0 32px rgba(192,38,211,0.35), 0 0 64px rgba(192,38,211,0.15);
+
+            /* Градиент-пресеты для переиспользования */
+            --grad-accent-soft: linear-gradient(135deg, #C026D3 0%, #E879F9 100%);
+            --grad-accent-strong: linear-gradient(135deg, #A21CAF 0%, #C026D3 50%, #E879F9 100%);
+            --grad-success: linear-gradient(135deg, #059669 0%, #10B981 100%);
+            --grad-icy: linear-gradient(135deg, #0369A1 0%, #0EA5E9 100%);
         }
 
         [data-theme="light"] {
@@ -105,7 +123,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: var(--font-ui); /* Inter как базовый UI-шрифт (Проблема 6) */
             background: var(--bg-primary);
             color: var(--text-primary);
             overflow: hidden;
@@ -527,53 +545,53 @@
             background: var(--bg-glass);
             backdrop-filter: blur(20px);
             border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-            transition: all 0.3s;
+            box-shadow: var(--sh-lg), inset 0 1px 0 rgba(255,255,255,0.08); /* многоуровневая глубина (Проблема 6) */
+            transition: transform 180ms cubic-bezier(0.32,0.72,0,1), box-shadow 250ms ease-out, background 250ms ease-out;
         }
 
         .fab-btn:hover { transform: scale(1.1); background: var(--accent); color: white; }
-        .fab-btn.active { background: var(--accent); color: white; box-shadow: var(--shadow-glow); }
+        .fab-btn:active { transform: scale(0.9); } /* tactile-press (Проблема 6) */
+        .fab-btn.active { background: var(--grad-accent-strong); color: white; box-shadow: var(--sh-glow); border-color: transparent; }
 
-        #radar-widget {
-            position: absolute;
-            bottom: 22px;
-            right: 18px;
-            z-index: 400;
-            width: 85px;
-            height: 85px;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 2px solid var(--border-accent);
-            box-shadow: 0 0 40px var(--accent-glow);
-            pointer-events: none;
-            background: rgba(15, 15, 22, 0.85);
-        }
+        /* (legacy #radar-widget / .radar-sweep-widget / .radar-ring удалены — заменены на #radar-core, Проблема 2) */
 
-        .radar-sweep-widget {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            width: 42px;
-            height: 42px;
-            background: conic-gradient(from 90deg, transparent 0deg, rgba(192, 38, 211, 0.9) 90deg);
-            transform-origin: 0% 100%;
-            animation: spin 2.5s linear infinite;
-        }
-
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-
-        .radar-ring {
-            position: absolute;
-            top: 50%;
-            left: 50%;
+        /* === ЦЕНТРАЛЬНЫЙ РАДАР (Проблема 2) — фиксирован по центру экрана, не зависит от pan/zoom === */
+        #radar-core {
+            position: fixed; top: 50%; left: 50%;
+            width: min(75vw, 520px); aspect-ratio: 1 / 1;
             transform: translate(-50%, -50%);
-            border-radius: 50%;
-            border: 1px solid rgba(192, 38, 211, 0.35);
-            width: 100%;
-            height: 100%;
+            z-index: 450; pointer-events: none;
+            opacity: 1; transition: opacity 350ms ease-out;
         }
-
-        .radar-ring.inner { width: 50%; height: 50%; }
+        #radar-core.radar-off { opacity: 0; }
+        .radar-core-ring { position: absolute; inset: 0; margin: auto; border-radius: 50%; border: 1px solid rgba(192,38,211,0.18); }
+        .radar-core-ring.mid { width: 66%; height: 66%; border-color: rgba(192,38,211,0.12); }
+        .radar-core-ring.inn { width: 33%; height: 33%; border-color: rgba(192,38,211,0.08); }
+        .radar-sweep {
+            position: absolute; inset: 0; margin: auto; border-radius: 50%; will-change: transform;
+            background: conic-gradient(from -30deg,
+                rgba(192,38,211,0) 0deg, rgba(192,38,211,0.35) 30deg,
+                rgba(232,121,249,0.5) 55deg, rgba(255,255,255,0.85) 60deg,
+                rgba(255,255,255,0) 75deg, rgba(0,0,0,0) 360deg);
+            -webkit-mask: radial-gradient(circle, black 33%, transparent 75%);
+                    mask: radial-gradient(circle, black 33%, transparent 75%);
+        }
+        .radar-line {
+            position: absolute; top: 50%; left: 50%; width: 50%; height: 2px;
+            transform-origin: 0 50%; will-change: transform;
+            background: linear-gradient(90deg, rgba(192,38,211,1) 0%, rgba(255,255,255,0.7) 70%, rgba(255,255,255,0) 100%);
+            box-shadow: 0 0 8px rgba(192,38,211,0.8);
+        }
+        .radar-eye { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; transform: translate(-50%,-50%); }
+        .radar-eye-core {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: radial-gradient(circle, #fff 20%, #C026D3 80%);
+            box-shadow: 0 0 24px #C026D3, 0 0 48px rgba(192,38,211,0.5);
+            animation: radarEyePulse 2.2s ease-in-out infinite;
+        }
+        @keyframes radarEyePulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: 0.85; } }
+        .demand-zone-dot { transition: filter 120ms linear; } /* плавная подсветка лучом радара */
+        @media (prefers-reduced-motion: reduce) { .radar-eye-core { animation: none !important; } }
 
         #loading-radar-overlay {
             position: absolute;
@@ -645,10 +663,9 @@
         #bottom-sheet.collapsed { transform: translateY(calc(100% - 75px)); }
 
         /* Пауза фоновых анимаций при скрытой вкладке — экономия батареи (Этап 6) */
-        body.anim-paused .radar-sweep-widget,
         body.anim-paused .heatmap-pulse-animation,
-        body.anim-paused .flow-line-animated,
-        body.anim-paused .flow-arrow-animated { animation-play-state: paused !important; }
+        body.anim-paused .flow-path,
+        body.anim-paused .radar-eye-core { animation-play-state: paused !important; }
 
         /* === EVENT DRAWER (bottom-sheet карточка события, mobile-first) — Приоритет 3 === */
         #event-drawer-backdrop {
@@ -660,19 +677,34 @@
 
         #event-drawer {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 10041;
-            display: flex; flex-direction: column; max-height: 80vh;
-            background: var(--bg-glass-strong);
-            backdrop-filter: blur(26px) saturate(1.4); -webkit-backdrop-filter: blur(26px) saturate(1.4);
-            border-top: 1px solid var(--border);
+            display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+            background: rgba(15, 15, 22, 0.72);
+            backdrop-filter: blur(32px) saturate(180%) brightness(1.1); -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 26px 26px 0 0;
-            box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.55);
+            /* Многоуровневые тени для premium-глубины (Приоритет 5) */
+            box-shadow:
+                0 -2px 8px rgba(0, 0, 0, 0.2),
+                0 -8px 24px rgba(0, 0, 0, 0.3),
+                0 -24px 64px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
             padding: 0 18px calc(16px + env(safe-area-inset-bottom, 0px));
-            transform: translateY(101%);
-            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
             overscroll-behavior: contain; will-change: transform;
         }
-        #event-drawer.open { transform: translateY(0); }
-        @media (min-width: 700px) { #event-drawer { left: auto; right: 24px; width: 400px; border-radius: 26px; bottom: 24px; } }
+        /* 3 snap-состояния: collapsed 78px / half 40vh / full 8vh + hidden (Проблема 3) */
+        #event-drawer.state-collapsed { transform: translateY(calc(100% - 78px)); }
+        #event-drawer.state-half      { transform: translateY(40vh); }
+        #event-drawer.state-full      { transform: translateY(8vh); }
+        #event-drawer.state-hidden    { transform: translateY(100%); }
+        @media (min-width: 700px) {
+            /* На десктопе drawer — боковая панель справа, без bottom-sheet-жестов */
+            #event-drawer { left: auto; right: 24px; bottom: 24px; top: 72px; width: 400px; height: auto; max-height: calc(100vh - 96px); border-radius: 24px; transform: translateX(calc(100% + 40px)); }
+            #event-drawer.state-collapsed, #event-drawer.state-half, #event-drawer.state-full { transform: translateX(0); }
+            #event-drawer.state-hidden { transform: translateX(calc(100% + 40px)); }
+            .drawer-handle { display: none; }
+        }
 
         .drawer-handle { padding: 12px 0 4px; display: flex; justify-content: center; cursor: grab; touch-action: none; }
         .drawer-bar { width: 44px; height: 5px; border-radius: 10px; background: rgba(255, 255, 255, 0.32); }
@@ -683,7 +715,7 @@
             transition: transform 0.15s, background 0.15s;
         }
         .drawer-close:active { transform: scale(0.9); background: rgba(255, 255, 255, 0.14); }
-        .drawer-body { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding-bottom: 6px; }
+        .drawer-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding-bottom: 6px; }
 
         .drawer-alpha { display: flex; align-items: center; gap: 14px; margin: 8px 0 14px; }
         .drawer-alpha-num { font-family: 'Oswald', sans-serif; font-size: 2.5rem; font-weight: 700; line-height: 0.9; }
@@ -698,9 +730,51 @@
             padding: 14px; border-radius: 14px; font-weight: 700; font-size: 0.9rem;
             border: none; cursor: pointer; text-decoration: none; transition: transform 0.15s;
         }
-        .drawer-btn.primary { background: var(--accent); color: #fff; box-shadow: var(--shadow-glow); }
+        .drawer-btn.primary { background: var(--grad-accent-soft); color: #fff; box-shadow: var(--sh-glow); }
         .drawer-btn.secondary { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); border: 1px solid var(--border); }
+        /* Micro-interactions: touch-friendly feedback (Приоритет 5) */
+        .drawer-btn { transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), filter 0.25s, box-shadow 0.25s; }
         .drawer-btn:active { transform: scale(0.96); }
+        .drawer-btn.primary:active { filter: brightness(1.1); }
+        [data-theme="light"] #event-drawer { background: rgba(255, 255, 255, 0.82); border-top-color: rgba(0, 0, 0, 0.08); }
+
+        /* === PREMIUM VISUAL POLISH (Приоритет 5) === */
+        /* 1. Типографика: Oswald для заголовков, JetBrains Mono для цифр */
+        .drawer-title { font-family: 'Oswald', sans-serif; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px; line-height: 1.2; }
+        .drawer-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-dim); }
+        .popup-stat-value, .drawer-alpha-num, #speed-display, .stat-value, .radar-counter { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+        /* 4. Более чистый glass — утилита для премиум-поверхностей */
+        .glass-premium {
+            background: rgba(15, 15, 22, 0.72);
+            backdrop-filter: blur(32px) saturate(180%) brightness(1.1); -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.1);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+        [data-theme="light"] .glass-premium { background: rgba(255, 255, 255, 0.78); border-color: rgba(0, 0, 0, 0.08); }
+
+        /* 5. Живой статус-бейдж с glow */
+        .live-badge {
+            display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+            background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 20px; font-size: 0.7rem; font-weight: 700; color: var(--success);
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .live-badge::before {
+            content: ''; width: 6px; height: 6px; background: var(--success); border-radius: 50%;
+            box-shadow: 0 0 12px var(--success); animation: livePulse 2s ease-in-out infinite;
+        }
+        @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* 3. Дыхание горячих зон (alpha >= 85) */
+        @keyframes breathe { 0%, 100% { opacity: 0.85; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }
+        .demand-zone-dot.hot-zone-indicator { animation: breathe 2.5s ease-in-out infinite; }
+
+        /* Риск-mitigation: уважаем prefers-reduced-motion — глушим декоративные анимации */
+        @media (prefers-reduced-motion: reduce) {
+            .flow-path, .flow-arrow, .demand-zone-dot.hot-zone-indicator, .live-badge::before,
+            .radar-eye-core, .heatmap-pulse-animation, .trp-cluster { animation: none !important; }
+        }
 
         .drag-handle {
             width: 100%;
@@ -1345,8 +1419,6 @@
         .achievement-content h3 { font-size: 0.95rem; margin-bottom: 4px; text-transform: uppercase; }
         .achievement-content p { font-size: 0.8rem; opacity: 0.9; }
 
-        .flow-line-animated { animation: flowMove 3s linear infinite; }
-
         /* === PEDESTRIAN FLOW: SVG overlay + CSS animation (Приоритет 4) === */
         .flow-svg { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
         .flow-path {
@@ -1372,6 +1444,12 @@
         .flow-legend .legend-title { font-weight: 700; margin-bottom: 8px; color: var(--accent); font-size: 0.8rem; }
         .flow-legend .legend-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--text-secondary); white-space: nowrap; }
         .flow-legend .legend-color { width: 18px; height: 6px; border-radius: 4px; display: inline-block; flex-shrink: 0; }
+
+        /* Компактная легенда heatmap — 1 строка вместо 6-рядного контрола (Проблема 5, вариант B) */
+        .heatmap-legend { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 12px; font-size: 0.7rem; white-space: nowrap; }
+        .heatmap-legend .hm-title { font-weight: 700; color: var(--accent); }
+        .heatmap-legend .hm-end { color: var(--text-dim); }
+        .heatmap-legend .hm-bar { width: 84px; height: 8px; border-radius: 5px; background: linear-gradient(90deg, #0000ff, #00ff00, #adff2f, #ffff00, #ffa500, #ff0000); }
 
         .heatmap-pulse-animation { animation: heatmapPulse 2s ease-out infinite; }
         @keyframes heatmapPulse {
@@ -1714,10 +1792,14 @@
         <button id="btn-locate" class="fab-btn" onclick="locateMe()"><i class="ph-fill ph-navigation-arrow"></i></button>
     </div>
 
-    <div id="radar-widget" class="opacity-0">
-        <div class="radar-sweep-widget"></div>
-        <div class="radar-ring"></div>
-        <div class="radar-ring inner"></div>
+    <!-- Центральный анимированный радар с tracking-подсветкой маркеров (Проблема 2) -->
+    <div id="radar-core" class="radar-off">
+        <div class="radar-core-ring"></div>
+        <div class="radar-core-ring mid"></div>
+        <div class="radar-core-ring inn"></div>
+        <div class="radar-sweep"></div>
+        <div class="radar-line"></div>
+        <div class="radar-eye"><div class="radar-eye-core"></div></div>
     </div>
 
     <div id="top-recommendation">
@@ -1822,8 +1904,8 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-    <!-- Анимированные «муравьиные тропы» для AI-потоков людей (Приоритет 3) -->
-    <script src="https://unpkg.com/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.js"></script>
+    <!-- leaflet.heat ДОЛЖЕН грузиться ПОСЛЕ ядра Leaflet, иначе L.heatLayer не регистрируется (баг найден в браузере) -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <!-- База событий вынесена в отдельный файл (Этап 3). Должна грузиться ДО основного скрипта. -->
     <script src="data.js"></script>
     <script>
@@ -2171,11 +2253,12 @@
                 // Вкладка скрыта: ставим CSS-анимации на паузу и глушим периодические сканеры
                 document.body.classList.add('anim-paused');
                 stopBackgroundScanners();
+                stopRadar(); // глушим RAF-циклы радара (экономия батареи)
                 if (app.state.crowdFlowEnabled) clearCrowdFlow(); // снимаем ant-path анимации (экономия батареи)
             } else {
                 document.body.classList.remove('anim-paused');
                 startBackgroundScanners();
-                if (appRunning) runAIScanner(); // разовое обновление после возврата
+                if (appRunning) { runAIScanner(); startRadar(); } // разовое обновление + ресинк радара
                 if (app.state.crowdFlowEnabled) renderCrowdFlow(); // восстанавливаем потоки
             }
         });
@@ -2236,7 +2319,8 @@
                     deferredPrompt: null, // событие beforeinstallprompt для нативной установки PWA (Этап 6)
                     flowHourOverride: null, // перемотка времени для AI-потоков (Приоритет 3); null = текущий час
                     mode: 'default', // режим карты: default | heatmap | flow (state machine)
-                    currentOpenEventId: null // открытая карточка-drawer; переживает refresh/mode-switch
+                    currentOpenEventId: null, // открытая карточка-drawer; переживает refresh/mode-switch
+                    radarVisible: true // центральный радар виден только в режиме default (Проблема 2)
                 };
                 // Простой PubSub поверх EventTarget
                 this.events = new EventTarget();
@@ -2821,7 +2905,7 @@ out center ${POI_LIMIT * 3};`;
                 document.getElementById('top-left-panel').classList.remove('hide-top');
                 document.getElementById('top-right-panel').classList.remove('hide-top');
                 document.getElementById('fab-actions').classList.remove('opacity-0');
-                document.getElementById('radar-widget').classList.remove('opacity-0');
+                // legacy radar-widget удалён — центральный #radar-core запускается в startLoadingRadar (Проблема 2)
                 startTracking();
 
                 appRunning = true;
@@ -2871,12 +2955,79 @@ out center ${POI_LIMIT * 3};`;
             map.invalidateSize();
         }
 
+        // ============================================
+        // ЦЕНТРАЛЬНЫЙ РАДАР: sweep-трекинг + подсветка маркеров при проходе луча (Проблема 2)
+        // ============================================
+        const RADAR_PERIOD_MS = 3800;           // период оборота (совпадает с ощущением CSS)
+        const radarGlow = {};                    // eventId -> интенсивность свечения 0..1
+        let radarSweepRAF = null, radarDecayRAF = null, radarSweepStart = 0;
+        let radarSweepEl = null, radarLineEl = null;
+
+        function highlightMarkersAtAngle(angleDeg) {
+            if (app.state.mode !== 'default' || !map) return;
+            const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+            const maxR = Math.min(window.innerWidth, window.innerHeight) * 0.42;
+            for (const id in mapMarkers) {
+                const m = mapMarkers[id];
+                if (!m.getElement || !m.getElement()) continue;              // виден только раскластеренный маркер
+                const ev = m._eventData;
+                if (!ev || ev.alpha < 65) continue;                          // подсвечиваем только «горячие» (α≥65)
+                const p = map.latLngToContainerPoint(m.getLatLng());
+                const dx = p.x - cx, dy = p.y - cy;
+                if (Math.hypot(dx, dy) > maxR) continue;
+                let ma = Math.atan2(dy, dx) * 180 / Math.PI; if (ma < 0) ma += 360;
+                const diff = ((angleDeg - ma + 540) % 360) - 180;           // насколько луч уже прошёл маркер
+                if (diff >= -3 && diff <= 26) radarGlow[id] = 1;             // «зацепило» -> вспышка
+            }
+        }
+
+        function _radarSweepTick(now) {
+            if (app.state.radarVisible) {
+                const angle = (((now - radarSweepStart) % RADAR_PERIOD_MS) / RADAR_PERIOD_MS) * 360;
+                if (radarSweepEl) radarSweepEl.style.transform = `rotate(${angle}deg)`;
+                if (radarLineEl) radarLineEl.style.transform = `rotate(${angle}deg)`;
+                highlightMarkersAtAngle(angle);
+            }
+            radarSweepRAF = requestAnimationFrame(_radarSweepTick);
+        }
+        function _radarDecayTick() {
+            for (const id in radarGlow) {
+                const v = radarGlow[id] * 0.9;                               // плавное угасание
+                const m = mapMarkers[id];
+                const el = m && m.getElement && m.getElement();
+                const dot = el && (el.querySelector('.demand-zone-dot') || el);
+                if (dot) dot.style.filter = v > 0.03 ? `drop-shadow(0 0 ${(v * 18).toFixed(1)}px #E879F9)` : '';
+                if (v < 0.03) delete radarGlow[id]; else radarGlow[id] = v;
+            }
+            radarDecayRAF = requestAnimationFrame(_radarDecayTick);
+        }
+        function setRadarVisible(v) {
+            app.state.radarVisible = v;
+            const core = document.getElementById('radar-core');
+            if (core) core.classList.toggle('radar-off', !v);
+        }
+        function startRadar() {
+            const core = document.getElementById('radar-core');
+            if (!core) return;
+            radarSweepEl = core.querySelector('.radar-sweep');
+            radarLineEl = core.querySelector('.radar-line');
+            setRadarVisible(app.state.mode === 'default');
+            stopRadar();                                                     // идемпотентно
+            radarSweepStart = performance.now();
+            radarSweepRAF = requestAnimationFrame(_radarSweepTick);
+            radarDecayRAF = requestAnimationFrame(_radarDecayTick);
+        }
+        function stopRadar() {
+            if (radarSweepRAF) { cancelAnimationFrame(radarSweepRAF); radarSweepRAF = null; }
+            if (radarDecayRAF) { cancelAnimationFrame(radarDecayRAF); radarDecayRAF = null; }
+        }
+
         async function startLoadingRadar() {
             const overlay = document.getElementById('loading-radar-overlay');
             overlay.classList.add('active');
             const counter = document.getElementById('loading-counter-text');
             const total = app.state.localEvents.length;
-            
+
             for (let i = 0; i < total; i++) {
                 await new Promise(r => setTimeout(r, 250));
                 const event = app.state.localEvents[i];
@@ -2884,54 +3035,16 @@ out center ${POI_LIMIT * 3};`;
                 counter.innerText = `${i + 1}/${total}`;
                 playBeep();
             }
-            
+
             await new Promise(r => setTimeout(r, 1200));
             overlay.classList.remove('active');
             showBottomSheet();
+            startRadar(); // запускаем центральный радар после появления всех маркеров (Проблема 2)
             // renderEventsList/updateStats вызываются через подписку на 'data:updated' (см. launchApp -> app.setLocalEvents)
             setTimeout(() => showTopRecommendation(), 1500);
         }
 
-        // Ленивая генерация тяжёлого HTML попапа — вызывается только при открытии
-        function buildPopupHtml(event) {
-            const verifiedBadge = event.verified
-                ? `<span class="verified-badge verified"><i class="ph-fill ph-check-circle"></i></span>`
-                : `<span class="verified-badge unverified"><i class="ph-fill ph-warning"></i></span>`;
-
-            const timeline = generateTimeline(event);
-
-            return `
-                <div style="font-size: 0.85rem;">
-                    <div style="margin-bottom: 10px;">
-                        <div style="font-size: 0.73rem; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                            ${event.typeLabel} ${verifiedBadge}
-                        </div>
-                        <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">${event.name}</h3>
-                        <div style="font-size: 0.78rem; color: var(--text-dim);"><i class="ph-fill ph-map-pin"></i> ${event.address}</div>
-                    </div>
-                    <div class="popup-demand-reason">
-                        <strong>💡 ПОЧЕМУ ЗДЕСЬ СПРОС:</strong>
-                        <div style="margin-top: 5px;">${event.demandReason.primary}</div>
-                    </div>
-                    <div class="popup-stats">
-                        <div class="popup-stat"><div class="popup-stat-value">⏰ ${event.demandReason.peakTime}</div><div class="popup-stat-label">Пик спроса</div></div>
-                        <div class="popup-stat"><div class="popup-stat-value">${event.avgFare}${event.avgFare > 100 ? '₽' : ''}</div><div class="popup-stat-label">Средний чек</div></div>
-                        <div class="popup-stat"><div class="popup-stat-value" style="color: var(--${getCompetitionLevel(event.competition.ratio)});">${event.competition.taxis}</div><div class="popup-stat-label">Такси в зоне</div></div>
-                        <div class="popup-stat"><div class="popup-stat-value">${event.distance.toFixed(1)} км</div><div class="popup-stat-label">Расстояние</div></div>
-                    </div>
-                    <div class="popup-coords">📍 ${event.lat.toFixed(6)}, ${event.lng.toFixed(6)}<br>${event.verified ? '✅ Координаты проверены' : '⚠️ Не проверены'}</div>
-                    ${timeline}
-                    <div style="display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0;">
-                        ${event.dynamicFactors.map(f => `<div style="background: rgba(255,255,255,0.06); border: 1px solid var(--border); padding: 4px 10px; border-radius: 10px; font-size: 0.7rem;">${f.factor} <span style="color: var(--success); font-weight: 700;">${f.impact}</span></div>`).join('')}
-                    </div>
-                    <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 10px; margin: 12px 0; font-size: 0.78rem;">💰 <strong>Совет:</strong> ${event.demandReason.tips}</div>
-                    <div class="popup-btn-row">
-                        <a href="https://yandex.ru/maps/?rtext=~${event.lat},${event.lng}&rtt=auto" target="_blank" class="popup-btn primary"><i class="ph-bold ph-navigation-arrow"></i> Маршрут</a>
-                        <button class="popup-btn secondary" onclick="focusOnEvent('${event.id}')"><i class="ph-bold ph-crosshair"></i> Фокус</button>
-                    </div>
-                </div>
-            `;
-        }
+        // (buildPopupHtml удалён — L.popup заменён на bottom-sheet drawer, Приоритет 3)
 
         function createMarker(event) {
             if (!markersGroup) return;
@@ -2939,7 +3052,7 @@ out center ${POI_LIMIT * 3};`;
             // Размер точки масштабируется по спросу (alpha), как раньше делал радиус круга
             const size = Math.round(16 + (event.alpha / 100) * 28); // 16–44px
             const icon = L.divIcon({
-                html: `<div class="demand-zone-dot"></div>`,
+                html: `<div class="demand-zone-dot${event.alpha >= 85 ? ' hot-zone-indicator' : ''}"></div>`,
                 className: 'demand-zone-marker',
                 iconSize: L.point(size, size),
                 iconAnchor: L.point(size / 2, size / 2)
@@ -2950,6 +3063,7 @@ out center ${POI_LIMIT * 3};`;
             // Вместо L.popup — открываем мобильный bottom-sheet drawer (Приоритет 3)
             marker.on('click', () => openEventDrawer(event.id));
 
+            marker._eventData = event; // для tracking-подсветки радаром (Проблема 2)
             markersGroup.addLayer(marker);
             mapMarkers[event.id] = marker;
         }
@@ -2962,14 +3076,17 @@ out center ${POI_LIMIT * 3};`;
             const alphaColor = event.alpha >= 85 ? 'var(--danger)' : event.alpha >= 70 ? 'var(--warning)' : 'var(--success)';
             return `
                 <div style="margin-bottom: 4px;">
-                    <div style="font-size:0.72rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em; display:flex; align-items:center; gap:6px; margin-bottom:4px;">${event.typeLabel} ${verifiedBadge}</div>
-                    <h3 style="font-size:1.3rem; font-weight:700; line-height:1.15;">${event.name}</h3>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <span style="font-size:0.72rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em; display:inline-flex; align-items:center; gap:6px;">${event.typeLabel} ${verifiedBadge}</span>
+                        <span class="live-badge">Live</span>
+                    </div>
+                    <h3 class="drawer-title">${event.name}</h3>
                     <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;"><i class="ph-fill ph-map-pin"></i> ${event.address}</div>
                 </div>
                 <div class="drawer-alpha">
                     <div class="drawer-alpha-num" style="color:${alphaColor};">${event.alpha}</div>
                     <div style="flex:1;">
-                        <div style="font-size:0.66rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">α-Score спроса</div>
+                        <div class="drawer-label" style="margin-bottom:6px;">α-Score спроса</div>
                         <div class="drawer-alpha-bar"><div class="drawer-alpha-fill" style="width:${Math.max(0, Math.min(100, event.alpha))}%;"></div></div>
                     </div>
                 </div>
@@ -2992,22 +3109,54 @@ out center ${POI_LIMIT * 3};`;
             `;
         }
 
-        function openEventDrawer(eventId) {
+        // --- 3-state bottom-sheet: collapsed 78px / half 40vh / full 8vh / hidden (Проблема 3) ---
+        const DRAWER_STATES = ['state-full', 'state-half', 'state-collapsed', 'state-hidden'];
+        function drawerStateTranslatePx(s) {
+            const vh = window.innerHeight;
+            if (s === 'state-full') return vh * 0.08;
+            if (s === 'state-half') return vh * 0.40;
+            if (s === 'state-collapsed') return vh - 78;
+            return vh; // hidden
+        }
+        function currentDrawerState() {
+            const d = document.getElementById('event-drawer');
+            return DRAWER_STATES.find(s => d.classList.contains(s)) || 'state-hidden';
+        }
+        function nearestDrawerState(px) {
+            let best = 'state-full', bd = Infinity;
+            for (const s of ['state-full', 'state-half', 'state-collapsed']) {
+                const d = Math.abs(drawerStateTranslatePx(s) - px);
+                if (d < bd) { bd = d; best = s; }
+            }
+            return best;
+        }
+        function stepDrawerState(cur, dir) { // dir +1 = вниз (к hidden), -1 = вверх (к full)
+            const order = ['state-full', 'state-half', 'state-collapsed', 'state-hidden'];
+            let i = order.indexOf(cur); if (i < 0) i = 1;
+            return order[Math.max(0, Math.min(order.length - 1, i + dir))];
+        }
+        function applyDrawerState(s) {
+            const d = document.getElementById('event-drawer');
+            const bd = document.getElementById('event-drawer-backdrop');
+            d.style.transition = '';                 // вернуть CSS-переход (если свайп его выключал)
+            d.classList.remove(...DRAWER_STATES);
+            d.classList.add(s);
+            d.style.transform = '';                  // отдать transform CSS-классу
+            if (s === 'state-half' || s === 'state-full') bd.classList.add('open'); else bd.classList.remove('open');
+            if (s === 'state-hidden') app.state.currentOpenEventId = null;
+        }
+
+        function openEventDrawer(eventId, snapTo = 'state-half') {
             const event = app.state.localEvents.find(e => e.id === eventId);
             if (!event) return;
             app.state.currentOpenEventId = eventId;
             const body = document.getElementById('drawer-body');
             body.innerHTML = buildDrawerHtml(event);
             body.scrollTop = 0;
-            document.getElementById('event-drawer').classList.add('open');
-            document.getElementById('event-drawer-backdrop').classList.add('open');
+            applyDrawerState(snapTo);
         }
 
-        function closeEventDrawer() {
-            app.state.currentOpenEventId = null;
-            document.getElementById('event-drawer').classList.remove('open');
-            document.getElementById('event-drawer-backdrop').classList.remove('open');
-        }
+        function closeEventDrawer() { applyDrawerState('state-hidden'); }
 
         // Стабильность: при refresh/mode-switch НЕ закрываем drawer — обновляем данные внутри (с сохранением скролла)
         function updateEventDrawer() {
@@ -3222,6 +3371,7 @@ out center ${POI_LIMIT * 3};`;
             }
 
             if (mode === 'flow') showFlowLegend(); else hideFlowLegend(); // легенда только в режиме потоков
+            setRadarVisible(mode === 'default'); // центральный радар виден только в default (Проблема 2)
             updateModeButtons();
         }
 
@@ -3310,18 +3460,13 @@ out center ${POI_LIMIT * 3};`;
             return hotspots;
         }
 
+        // Компактная 1-строчная легенда-чипс вместо громоздкого контрола на 6 рядов (Проблема 5, вариант B)
         function addHeatmapLegend() {
             if (window.heatmapLegend) window.heatmapLegend.remove();
-            const legend = L.control({ position: 'bottomright' });
-            legend.onAdd = function() {
-                const div = L.DomUtil.create('div', 'heatmap-legend');
-                div.innerHTML = `<div style="font-weight: 700; margin-bottom: 10px; color: var(--accent);">🔥 Интенсивность</div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background: #ff0000; border-radius: 4px;"></div><span>Критический</span></div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background: #ffa500; border-radius: 4px;"></div><span>Очень высокий</span></div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background: #ffff00; border-radius: 4px;"></div><span>Высокий</span></div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background: #adff2f; border-radius: 4px;"></div><span>Средний</span></div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background: #00ff00; border-radius: 4px;"></div><span>Низкий</span></div>
-                    <div style="display: flex; align-items: center; gap: 8px;"><div style="width: 20px; height: 20px; background: #0000ff; border-radius: 4px;"></div><span>Очень низкий</span></div>`;
+            const legend = L.control({ position: 'bottomleft' });
+            legend.onAdd = function () {
+                const div = L.DomUtil.create('div', 'heatmap-legend glass-premium');
+                div.innerHTML = '<span class="hm-title">🔥 Спрос</span><span class="hm-end">низк.</span><span class="hm-bar"></span><span class="hm-end">крит.</span>';
                 return div;
             };
             legend.addTo(map);
@@ -3539,7 +3684,7 @@ out center ${POI_LIMIT * 3};`;
             if (window.flowLegend || !map) return;
             const legend = L.control({ position: 'bottomleft' });
             legend.onAdd = function () {
-                const div = L.DomUtil.create('div', 'flow-legend glass');
+                const div = L.DomUtil.create('div', 'flow-legend glass-premium');
                 div.innerHTML = '<div class="legend-title">👥 Потоки людей</div>' +
                     Object.keys(FLOW_STYLE).map(k => `<div class="legend-item"><span class="legend-color" style="background:${FLOW_STYLE[k].color}"></span>${FLOW_STYLE[k].label}</div>`).join('');
                 return div;
@@ -3884,167 +4029,4 @@ out center ${POI_LIMIT * 3};`;
                 filtered.forEach(e => {
                     const card = document.createElement('div');
                     card.className = `event-card ${e.alpha >= 85 ? 'high-alpha' : ''}`;
-                    card.innerHTML = `<div class="event-card-header"><div class="event-title-block"><div class="event-title">${e.name} <span class="event-type-badge">${e.typeLabel}</span></div><div class="event-address">${e.address} • ${e.distance.toFixed(1)} км</div></div><div class="alpha-badge ${e.alpha >= 85 ? 'high' : ''}">α ${e.alpha}</div></div><div class="demand-reason"><div class="demand-reason-text">${e.demandReason.primary}</div></div>`;
-                    card.onclick = () => focusOnEvent(e.id);
-                    list.appendChild(card);
-                });
-            });
-            
-            document.getElementById('city-modal').addEventListener('click', (e) => { if (e.target.id === 'city-modal') closeCityModal(); });
-            
-            // --- Bottom Sheet: свайпы с velocity + requestAnimationFrame (Этап 6) ---
-            const sheet = document.getElementById('bottom-sheet');
-            const sheetHandle = document.getElementById('sheet-handle');
-            const FLICK_VELOCITY = 0.4; // px/ms — порог резкого броска
-            let dragStartY = 0, dragStartOffset = 0, currentOffset = 0;
-            let lastMoveY = 0, lastMoveT = 0, velocity = 0;
-            let dragging = false, moved = false, suppressClick = false;
-            let sheetRAF = null, pendingOffset = 0;
-
-            const collapsedOffset = () => Math.max(0, sheet.offsetHeight - 75); // translateY класса .collapsed в px
-            const isCollapsed = () => sheet.classList.contains('collapsed');
-
-            // Плавное отслеживание позиции пальца через requestAnimationFrame
-            function applyOffsetRAF(offset) {
-                pendingOffset = offset;
-                if (sheetRAF) return;
-                sheetRAF = requestAnimationFrame(() => {
-                    sheetRAF = null;
-                    sheet.style.transform = `translateY(${pendingOffset}px)`;
-                });
-            }
-
-            // Возврат управления CSS-классу с анимацией (0.7s)
-            function snapSheet(collapse) {
-                if (sheetRAF) { cancelAnimationFrame(sheetRAF); sheetRAF = null; }
-                sheet.style.transition = '';   // восстановить CSS-переход
-                sheet.style.transform = '';    // отдать transform классу .collapsed
-                sheet.classList.toggle('collapsed', collapse);
-            }
-
-            sheetHandle.addEventListener('touchstart', (e) => {
-                dragging = true; moved = false;
-                dragStartY = e.touches[0].clientY;
-                dragStartOffset = isCollapsed() ? collapsedOffset() : 0;
-                currentOffset = dragStartOffset;
-                lastMoveY = dragStartY; lastMoveT = e.timeStamp; velocity = 0;
-                sheet.style.transition = 'none'; // на время перетаскивания без CSS-перехода
-            }, { passive: true });
-
-            sheetHandle.addEventListener('touchmove', (e) => {
-                if (!dragging) return;
-                const y = e.touches[0].clientY;
-                if (Math.abs(y - dragStartY) > 6) moved = true;
-                const dt = e.timeStamp - lastMoveT;
-                if (dt > 0) velocity = (y - lastMoveY) / dt; // px/ms, >0 = вниз
-                lastMoveY = y; lastMoveT = e.timeStamp;
-                currentOffset = Math.min(collapsedOffset(), Math.max(0, dragStartOffset + (y - dragStartY)));
-                applyOffsetRAF(currentOffset);
-            }, { passive: true });
-
-            sheetHandle.addEventListener('touchend', () => {
-                if (!dragging) return;
-                dragging = false;
-                if (!moved) { // просто тап — снимаем inline-transform, переключение сделает click
-                    sheet.style.transition = ''; sheet.style.transform = '';
-                    return;
-                }
-                let collapse;
-                if (Math.abs(velocity) > FLICK_VELOCITY) collapse = velocity > 0; // резкий бросок задаёт направление
-                else collapse = currentOffset > collapsedOffset() / 2;            // иначе — по позиции
-                snapSheet(collapse);
-                suppressClick = true; // не дать последующему click-у переключить обратно
-                setTimeout(() => { suppressClick = false; }, 400);
-            });
-
-            // Клик по хендлу (в т.ч. мышь на десктопе) — простое переключение
-            sheetHandle.addEventListener('click', () => {
-                if (suppressClick) { suppressClick = false; return; }
-                snapSheet(!isCollapsed());
-            });
-
-            // --- Event Drawer: swipe-to-dismiss (свайп вниз закрывает карточку) ---
-            const drawerEl = document.getElementById('event-drawer');
-            const drawerHandle = document.getElementById('drawer-handle');
-            let dStartY = 0, dLastY = 0, dDragging = false, dMoved = false, dRAF = null;
-            const applyDrawerY = (y) => {
-                if (dRAF) return;
-                dRAF = requestAnimationFrame(() => { dRAF = null; drawerEl.style.transform = `translateY(${y}px)`; });
-            };
-            drawerHandle.addEventListener('touchstart', (e) => {
-                dDragging = true; dMoved = false; dStartY = dLastY = e.touches[0].clientY;
-                drawerEl.style.transition = 'none';
-            }, { passive: true });
-            drawerHandle.addEventListener('touchmove', (e) => {
-                if (!dDragging) return;
-                dLastY = e.touches[0].clientY;
-                const dy = Math.max(0, dLastY - dStartY); // тянем только вниз
-                if (dy > 4) dMoved = true;
-                applyDrawerY(dy);
-            }, { passive: true });
-            drawerHandle.addEventListener('touchend', () => {
-                if (!dDragging) return; dDragging = false;
-                if (dRAF) { cancelAnimationFrame(dRAF); dRAF = null; }
-                drawerEl.style.transition = '';
-                drawerEl.style.transform = '';
-                if (dMoved && (dLastY - dStartY) > 90) closeEventDrawer(); // свайп > 90px = закрыть
-            });
-
-            startBtn.addEventListener('click', async function handleClick(e) {
-                e.preventDefault(); e.stopPropagation();
-                console.log('🚀 Клик по кнопке старта...');
-                this.disabled = true; this.style.opacity = '0.6'; this.style.pointerEvents = 'none';
-                const status = document.getElementById('location-status');
-                if (status) status.textContent = '📍 Определение местоположения...';
-                
-                try {
-                    initAudio();
-                    if ('speechSynthesis' in window) {
-                        const unlockUtterance = new SpeechSynthesisUtterance('');
-                        unlockUtterance.volume = 0;
-                        window.speechSynthesis.speak(unlockUtterance);
-                    }
-                    
-                    if ("geolocation" in navigator) {
-                        await new Promise((resolve) => {
-                            navigator.geolocation.getCurrentPosition(
-                                async (pos) => {
-                                    app.state.baseLat = pos.coords.latitude; app.state.baseLng = pos.coords.longitude;
-                                    try {
-                                        await detectCityFromGPS(app.state.baseLat, app.state.baseLng);
-                                        await fetchWeather(app.state.baseLat, app.state.baseLng);
-                                        await validateAllCoordinates(masterEventsDB.filter(e => e.city === app.state.cityName).slice(0, 15));
-                                        launchApp();
-                                    } catch (err) { launchApp(); }
-                                    resolve();
-                                },
-                                async (err) => {
-                                    if (status) status.textContent = '⚠️ GPS недоступен, Москва';
-                                    try { await fetchWeather(app.state.baseLat, app.state.baseLng); } catch (e) {}
-                                    launchApp();
-                                    resolve();
-                                },
-                                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-                            );
-                            setTimeout(() => { launchApp(); resolve(); }, 10000);
-                        });
-                    } else {
-                        await fetchWeather(app.state.baseLat, app.state.baseLng);
-                        launchApp();
-                    }
-                } catch (error) {
-                    showNotification('❌ Ошибка: ' + error.message, 'ph-warning');
-                    this.disabled = false; this.style.opacity = '1'; this.style.pointerEvents = 'auto';
-                    if (status) status.textContent = '❌ Ошибка. Нажмите ещё раз.';
-                    launchApp();
-                }
-            });
-            
-            console.log('✅ Taxi Radar Pro PWA Edition готов!');
-        });
-
-        window.addEventListener('error', (e) => console.error('🔴 Глобальная ошибка:', e.error));
-        window.addEventListener('unhandledrejection', (e) => console.error('🔴 Необработанный Promise:', e.reason));
-    </script>
-</body>
-</html>
+                    card.innerHTML = `<div class="event-card-header"><div class="event-title-block"><div class="event-title">${e.name} <span class="event-type-badge">${e.typeLabel}</span></div><div class="event-address">${e.addre
