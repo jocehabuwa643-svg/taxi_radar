@@ -2454,6 +2454,12 @@
         let flowArrows = [];
         let lastPosSaveAt = 0; // троттлинг сохранения GPS-позиции в IndexedDB (Этап 4)
         let appRunning = false; // приложение запущено (интервалы активны) — для паузы в фоне (Этап 6)
+        let appLaunched = false; // launchApp уже отработал — защита от повторного запуска (double-launch на мобильных)
+
+        // Определение окружения (браузер vs установленный PWA) — для отладки на Android
+        function isStandalone() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        }
 
         // Загрузка статистики из IndexedDB (с авто-миграцией из старого localStorage) — Этап 4
         (async () => {
@@ -2984,36 +2990,51 @@ out center ${POI_LIMIT * 3};`;
         }
 
         function launchApp() {
-            console.log('🚀 Запуск приложения...');
-            const startScreen = document.getElementById('start-screen');
-            startScreen.style.opacity = '0';
-            startScreen.style.visibility = 'hidden';
-            setTimeout(() => startScreen.style.display = 'none', 1000);
-            
-            document.getElementById('header-city').textContent = app.state.cityName;
+            if (appLaunched) { console.log('⏭️ [APP] launchApp: повторный вызов проигнорирован (idempotent)'); return; }
+            appLaunched = true;
+            console.log('🚀 [APP] Запуск приложения... город=' + app.state.cityName + ' координаты=' + app.state.baseLat + ',' + app.state.baseLng);
+            try {
+                const startScreen = document.getElementById('start-screen');
+                startScreen.style.opacity = '0';
+                startScreen.style.visibility = 'hidden';
+                startScreen.style.pointerEvents = 'none';
+                setTimeout(() => { startScreen.style.display = 'none'; }, 1000);
 
-            setTimeout(() => {
-                initMap();
-                document.getElementById('top-left-panel').classList.remove('hide-top');
-                document.getElementById('top-right-panel').classList.remove('hide-top');
-                document.getElementById('fab-actions').classList.remove('opacity-0');
-                // legacy radar-widget удалён — центральный #radar-core запускается в startLoadingRadar (Проблема 2)
-                startTracking();
+                document.getElementById('header-city').textContent = app.state.cityName;
 
-                appRunning = true;
-                if (app.state.autoRefreshEnabled) autoRefreshInterval = setInterval(() => manualRefresh(false), 15 * 60 * 1000);
-                startBackgroundScanners();
+                setTimeout(() => {
+                    try {
+                        console.log('🗺️ [MAP] Инициализация карты...');
+                        initMap();
+                        console.log('✅ [MAP] Карта инициализирована');
+                        document.getElementById('top-left-panel').classList.remove('hide-top');
+                        document.getElementById('top-right-panel').classList.remove('hide-top');
+                        document.getElementById('fab-actions').classList.remove('opacity-0');
+                        startTracking();
 
-                // Загрузка реальных POI города через Overpass + анимация радара (Приоритет 1)
-                loadCityEvents(app.state.baseLat, app.state.baseLng, app.state.cityName, app.state.currentCountry, true);
+                        appRunning = true;
+                        if (app.state.autoRefreshEnabled) autoRefreshInterval = setInterval(() => manualRefresh(false), 15 * 60 * 1000);
+                        startBackgroundScanners();
 
-                setTimeout(runAIScanner, 5000);
-                setTimeout(() => playVoiceBriefing(), 3000);
+                        console.log('📊 [DATA] Загрузка POI города...');
+                        loadCityEvents(app.state.baseLat, app.state.baseLng, app.state.cityName, app.state.currentCountry, true);
 
-                app.state.userStats.totalTrips++;
-                saveStats();
-                if (app.state.userStats.totalTrips === 1) showAchievement('🚀', 'Первый запуск', 'Приложение запущено впервые');
-            }, 600);
+                        setTimeout(runAIScanner, 5000);
+                        setTimeout(() => playVoiceBriefing(), 3000);
+
+                        app.state.userStats.totalTrips++;
+                        saveStats();
+                        if (app.state.userStats.totalTrips === 1) showAchievement('🚀', 'Первый запуск', 'Приложение запущено впервые');
+                        console.log('✅ [APP] Приложение запущено');
+                    } catch (e2) {
+                        console.error('❌ [APP] Ошибка на этапе инициализации карты/данных:', e2, e2 && e2.stack);
+                        showNotification('Ошибка карты: ' + (e2 && e2.message), 'ph-warning');
+                    }
+                }, 600);
+            } catch (e1) {
+                console.error('❌ [APP] Ошибка launchApp:', e1, e1 && e1.stack);
+                showNotification('Ошибка запуска: ' + (e1 && e1.message), 'ph-warning');
+            }
         }
 
         function initMap() {
@@ -3044,7 +3065,14 @@ out center ${POI_LIMIT * 3};`;
             flowGroup = L.layerGroup();
             map.addLayer(markersGroup);       // стартовый режим = default (видны только маркеры)
 
+            // На мобильных/standalone контейнер часто получает финальный размер позже —
+            // повторный invalidateSize после показа UI критичен, иначе карта серая/битая.
             map.invalidateSize();
+            setTimeout(() => { if (map) map.invalidateSize(); }, 350);
+            setTimeout(() => { if (map) map.invalidateSize(); }, 1200);
+            // Пересчёт размеров при повороте экрана / изменении высоты (адресная строка Android)
+            window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+            window.addEventListener('orientationchange', () => setTimeout(() => { if (map) map.invalidateSize(); }, 300));
         }
 
         // ============================================
@@ -4049,36 +4077,4 @@ out center ${POI_LIMIT * 3};`;
             const carIcon = L.icon({ iconUrl: carIconUrl, iconSize: [32, 32], iconAnchor: [16, 16] });
             
             navigator.geolocation.watchPosition(async (pos) => {
-                app.state.baseLat = pos.coords.latitude; app.state.baseLng = pos.coords.longitude;
-                if (pos.coords.speed !== null) document.getElementById('speed-display').innerText = Math.round(pos.coords.speed * 3.6);
-                if (!userMarker && map) {
-                    userMarker = L.marker([app.state.baseLat, app.state.baseLng], { icon: carIcon, zIndexOffset: 2000 }).addTo(map);
-                    userCircle = L.circle([app.state.baseLat, app.state.baseLng], { radius: pos.coords.accuracy / 2, color: '#C026D3', weight: 1, fillOpacity: 0.15 }).addTo(map);
-                } else if (userMarker) {
-                    userMarker.setLatLng([app.state.baseLat, app.state.baseLng]);
-                    userCircle.setLatLng([app.state.baseLat, app.state.baseLng]);
-                    userCircle.setRadius(pos.coords.accuracy / 2);
-                }
-                app.state.localEvents = app.state.localEvents.map(e => ({ ...e, distance: getDistance(app.state.baseLat, app.state.baseLng, e.lat, e.lng) }));
-
-                // Сохраняем последнюю позицию в IndexedDB (не чаще раза в 15с) — для офлайн-восстановления
-                const now = Date.now();
-                if (now - lastPosSaveAt > 15000) {
-                    lastPosSaveAt = now;
-                    try { await idbSet('trp_last_position', { lat: app.state.baseLat, lng: app.state.baseLng, timestamp: now }); } catch (e) {}
-                }
-            }, () => {}, { enableHighAccuracy: true, maximumAge: 2000 });
-        }
-
-        function initAudio() {
-            if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-        }
-
-        function playBeep() {
-            if (!audioCtx) return;
-            try {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(900, audio
+     
